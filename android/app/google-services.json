@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "579341867261",
+    "project_id": "spendo-56",
+    "storage_bucket": "spendo-56.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:579341867261:android:5e7c84cee15fbeaf32c694",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYRHmF5jklOjeUfQTkcPZOZXb3JpsfKsw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

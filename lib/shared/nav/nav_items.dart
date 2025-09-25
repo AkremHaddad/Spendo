@@ -7,8 +7,8 @@ class NavItem {
 }
 
 const List<NavItem> navItems = [
-  NavItem(Icons.dashboard, 'Dashboard'),
-  NavItem(Icons.category, 'Categories'),
   NavItem(Icons.trending_up, 'Cash Flow'),
+  NavItem(Icons.category, 'Categories'),
+  NavItem(Icons.dashboard, 'Dashboard'),
   NavItem(Icons.account_circle, 'Account'),
 ];

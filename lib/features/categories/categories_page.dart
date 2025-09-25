@@ -5,10 +5,15 @@ class CategoriesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        "🗂️ Categories Page",
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+    return Container(
+      child: const Center(
+        child: Text(
+          "🗂️ Categories Page",
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold
+          ),
+        ),
       ),
     );
   }
