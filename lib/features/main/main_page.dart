@@ -9,7 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 // Import your feature pages:
 import '../dashboard/dashboard_page.dart';
-import '../categories/categories_page.dart';
+import '../categories/presentation/categories_page.dart';
 import '../cashflow/cashflow_page.dart';
 import '../account/account_page.dart';
 

@@ -108,3 +108,60 @@ class AppTheme {
     ),
   );
 }
+
+extension ThemeColorsExtension on ThemeData {
+  // Primary
+  Color get primaryColorCustom =>
+      brightness == Brightness.dark ? AppColors.primaryDark : AppColors.primary;
+  Color get primaryContent =>
+      brightness == Brightness.dark ? AppColors.primaryContent : AppColors.primaryContent;
+
+  // Secondary
+  Color get secondary =>
+      brightness == Brightness.dark ? AppColors.secondaryDark : AppColors.secondary;
+  Color get secondaryContent =>
+      brightness == Brightness.dark ? AppColors.secondaryContentDark : AppColors.secondaryContent;
+
+  // Accent
+  Color get accent =>
+      brightness == Brightness.dark ? AppColors.accentDark : AppColors.accent;
+  Color get accentContent =>
+      brightness == Brightness.dark ? AppColors.accentContentDark : AppColors.accentContent;
+
+  // Neutral
+  Color get neutral =>
+      brightness == Brightness.dark ? AppColors.neutralDark : AppColors.neutral;
+  Color get neutralContent =>
+      brightness == Brightness.dark ? AppColors.neutralContentDark : AppColors.neutralContent;
+
+  // Base / Background
+  Color get base100 =>
+      brightness == Brightness.dark ? AppColors.base100Dark : AppColors.base100;
+  Color get base200 =>
+      brightness == Brightness.dark ? AppColors.base200Dark : AppColors.base200;
+  Color get base300 =>
+      brightness == Brightness.dark ? AppColors.base300Dark : AppColors.base300;
+  Color get baseContent =>
+      brightness == Brightness.dark ? AppColors.baseContentDark : AppColors.baseContent;
+
+  // Status
+  Color get info =>
+      brightness == Brightness.dark ? AppColors.infoDark : AppColors.info;
+  Color get infoContent =>
+      brightness == Brightness.dark ? AppColors.infoContentDark : AppColors.infoContent;
+
+  Color get success =>
+      brightness == Brightness.dark ? AppColors.successDark : AppColors.success;
+  Color get successContent =>
+      brightness == Brightness.dark ? AppColors.successContentDark : AppColors.successContent;
+
+  Color get warning =>
+      brightness == Brightness.dark ? AppColors.warningDark : AppColors.warning;
+  Color get warningContent =>
+      brightness == Brightness.dark ? AppColors.warningContentDark : AppColors.warningContent;
+
+  Color get error =>
+      brightness == Brightness.dark ? AppColors.errorDark : AppColors.error;
+  Color get errorContent =>
+      brightness == Brightness.dark ? AppColors.errorContentDark : AppColors.errorContent;
+}
