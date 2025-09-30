@@ -9,6 +9,7 @@ class WebNavbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return NavigationRail(
+      minWidth: 200,
       selectedIndex: notifier.selectedIndex,
       onDestinationSelected: notifier.setIndex,
       labelType: NavigationRailLabelType.all,

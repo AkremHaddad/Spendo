@@ -81,6 +81,19 @@ class AppTheme {
       selectedItemColor: AppColors.primaryContent,
       unselectedItemColor: Color(0xB3FFFFFF), // slightly transparent white
     ),
+    inputDecorationTheme: InputDecorationTheme(
+      labelStyle: TextStyle(color: AppColors.baseContent),      
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: AppColors.baseContent),  
+        borderRadius: BorderRadius.circular(8),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: AppColors.baseContent.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      fillColor: AppColors.base200,
+      filled: true,
+    ),
   );
 
   static ThemeData darkTheme = ThemeData(
@@ -105,6 +118,19 @@ class AppTheme {
       backgroundColor: AppColors.primaryDark,
       selectedItemColor: AppColors.primaryContent,
       unselectedItemColor: Color(0xB3FFFFFF),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      labelStyle: TextStyle(color: AppColors.baseContentDark),      
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: AppColors.baseContentDark),  
+        borderRadius: BorderRadius.circular(8),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: AppColors.baseContentDark.withOpacity(0.5)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      fillColor: AppColors.base200Dark,
+      filled: true,
     ),
   );
 }
@@ -164,4 +190,6 @@ extension ThemeColorsExtension on ThemeData {
       brightness == Brightness.dark ? AppColors.errorDark : AppColors.error;
   Color get errorContent =>
       brightness == Brightness.dark ? AppColors.errorContentDark : AppColors.errorContent;
+  Color get white =>
+      brightness == Brightness.dark ? Colors.black : Colors.white;
 }

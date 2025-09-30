@@ -44,8 +44,8 @@ class CategoriesPage extends StatelessWidget {
                  ElevatedButton(
                   onPressed: () => CategoryDetailDialog.showAddCategoryDialog(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary, 
-                    foregroundColor: theme.colorScheme.onPrimary, 
+                    backgroundColor: Theme.of(context).primaryColor,
+                    foregroundColor: Theme.of(context).primaryContent,
                   ),
                   child: const Text("Add"),
                 ),
@@ -55,7 +55,7 @@ class CategoriesPage extends StatelessWidget {
               Text(
                 "Expenses:",
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: Theme.of(context).primaryColor,
                 ),
@@ -67,16 +67,20 @@ class CategoriesPage extends StatelessWidget {
                   style: TextStyle(color: Theme.of(context).baseContent),
                 ),
               Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children:
-                    expenses.map((c) => CategoryCard(category: c)).toList(),
+                spacing: 12, // horizontal space between cards
+                runSpacing: 12, // vertical space between rows
+                children: expenses.map((c) {
+                  return SizedBox(
+                    width: 300, // fixed width
+                    child: CategoryCard(category: c),
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 30),
               Text(
                 "Income:",
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 32,
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
                 ),
@@ -90,7 +94,9 @@ class CategoriesPage extends StatelessWidget {
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: income.map((c) => CategoryCard(category: c)).toList(),
+                children: income.map((c) {
+                  return SizedBox(width: 300, child: CategoryCard(category: c));
+                }).toList(),
               ),
             ],
           ),

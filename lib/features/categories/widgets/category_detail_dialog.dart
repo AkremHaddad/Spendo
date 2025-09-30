@@ -29,7 +29,10 @@ const List<Color> kCategoryColors = [
 
 class CategoryDetailDialog {
   /// Show category detail dialog
-  static void showCategoryDetailDialog(BuildContext context, Category category) {
+  static void showCategoryDetailDialog(
+    BuildContext context,
+    Category category,
+  ) {
     final nameController = TextEditingController(text: category.name);
     final productInputController = TextEditingController();
 
@@ -43,7 +46,10 @@ class CategoryDetailDialog {
             void _addProduct() {
               final productName = productInputController.text.trim();
               if (productName.isEmpty) return;
-              context.read<CategoryNotifier>().addProduct(category.id, productName);
+              context.read<CategoryNotifier>().addProduct(
+                category.id,
+                productName,
+              );
               productInputController.clear();
               setState(() {});
             }
@@ -57,18 +63,30 @@ class CategoryDetailDialog {
                   content: TextField(controller: controller),
                   actions: [
                     TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).baseContent,
+                      ),
                       onPressed: () => Navigator.pop(ctx2, null),
                       child: const Text('Cancel'),
                     ),
                     ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx2, controller.text.trim()),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).primaryColor,
+                        foregroundColor: Theme.of(context).primaryContent,
+                      ),
+                      onPressed: () =>
+                          Navigator.pop(ctx2, controller.text.trim()),
                       child: const Text('Save'),
                     ),
                   ],
                 ),
               );
               if (newName != null && newName.isNotEmpty) {
-                context.read<CategoryNotifier>().editProduct(category.id, productId, newName);
+                context.read<CategoryNotifier>().editProduct(
+                  category.id,
+                  productId,
+                  newName,
+                );
                 setState(() {});
               }
             }
@@ -78,13 +96,22 @@ class CategoryDetailDialog {
                 context: ctx2,
                 builder: (confirmCtx) => AlertDialog(
                   title: const Text("Delete Product"),
-                  content: const Text("Are you sure you want to delete this product?"),
+                  content: const Text(
+                    "Are you sure you want to delete this product?",
+                  ),
                   actions: [
                     TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).baseContent,
+                      ),
                       onPressed: () => Navigator.pop(confirmCtx, false),
                       child: const Text("Cancel"),
                     ),
                     ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.error,
+                        foregroundColor: theme.colorScheme.onError,
+                      ),
                       onPressed: () => Navigator.pop(confirmCtx, true),
                       child: const Text("Delete"),
                     ),
@@ -92,7 +119,10 @@ class CategoryDetailDialog {
                 ),
               );
               if (confirmed == true) {
-                context.read<CategoryNotifier>().softDeleteProduct(category.id, productId);
+                context.read<CategoryNotifier>().softDeleteProduct(
+                  category.id,
+                  productId,
+                );
                 setState(() {});
               }
             }
@@ -102,13 +132,22 @@ class CategoryDetailDialog {
                 context: ctx2,
                 builder: (confirmCtx) => AlertDialog(
                   title: const Text("Delete Category"),
-                  content: const Text("Are you sure you want to delete this category?"),
+                  content: const Text(
+                    "Are you sure you want to delete this category?",
+                  ),
                   actions: [
                     TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).baseContent,
+                      ),
                       onPressed: () => Navigator.pop(confirmCtx, false),
                       child: const Text("Cancel"),
                     ),
                     ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.error,
+                        foregroundColor: theme.colorScheme.onError,
+                      ),
                       onPressed: () => Navigator.pop(confirmCtx, true),
                       child: const Text("Delete"),
                     ),
@@ -116,7 +155,9 @@ class CategoryDetailDialog {
                 ),
               );
               if (confirmed == true) {
-                context.read<CategoryNotifier>().softDeleteCategory(category.id);
+                context.read<CategoryNotifier>().softDeleteCategory(
+                  category.id,
+                );
                 Navigator.pop(ctx2);
               }
             }
@@ -136,15 +177,39 @@ class CategoryDetailDialog {
                       width: double.infinity,
                       decoration: BoxDecoration(
                         color: category.color,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(12),
+                        ),
                       ),
                       padding: const EdgeInsets.all(16),
                       child: Row(
                         children: [
                           Expanded(
-                            child: GestureDetector(
-                              onDoubleTap: () async {
-                                final controller = TextEditingController(text: category.name);
+                            child: Text(
+                              category.name,
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          // Edit button
+                          Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).white, // different bg for button
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.edit,
+                                color: Theme.of(ctx2).primaryColor,
+                              ),
+                              onPressed: () async {
+                                final controller = TextEditingController(
+                                  text: category.name,
+                                );
                                 final newName = await showDialog<String>(
                                   context: ctx2,
                                   builder: (_) => AlertDialog(
@@ -152,34 +217,53 @@ class CategoryDetailDialog {
                                     content: TextField(controller: controller),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.pop(ctx2, null),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Theme.of(
+                                            ctx2,
+                                          ).baseContent,
+                                        ),
+                                        onPressed: () =>
+                                            Navigator.pop(ctx2, null),
                                         child: const Text('Cancel'),
                                       ),
                                       ElevatedButton(
-                                        onPressed: () => Navigator.pop(ctx2, controller.text.trim()),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Theme.of(
+                                            ctx2,
+                                          ).primaryColor,
+                                          foregroundColor: Theme.of(
+                                            ctx2,
+                                          ).primaryContent,
+                                        ),
+                                        onPressed: () => Navigator.pop(
+                                          ctx2,
+                                          controller.text.trim(),
+                                        ),
                                         child: const Text('Save'),
                                       ),
                                     ],
                                   ),
                                 );
                                 if (newName != null && newName.isNotEmpty) {
-                                  context.read<CategoryNotifier>().editCategory(category.id, name: newName);
+                                  context.read<CategoryNotifier>().editCategory(
+                                    category.id,
+                                    name: newName,
+                                  );
                                   setState(() {});
                                 }
                               },
-                              child: Text(
-                                category.name,
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
                             ),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.white),
-                            onPressed: _confirmDeleteCategory,
+                          // Delete button
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).white, 
+                              borderRadius: BorderRadius.circular(50),
+                            ),
+                            child: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: _confirmDeleteCategory,
+                            ),
                           ),
                         ],
                       ),
@@ -188,78 +272,110 @@ class CategoryDetailDialog {
                     // Products list
                     Expanded(
                       child: Container(
-                        color: Theme.of(context).base300, 
+                        width: double.infinity,
+                        color: Theme.of(context).base300,
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: category.products
                                 .where((p) => !p.isDeleted)
                                 .map((p) {
-                              return Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: theme.shadowColor.withOpacity(0.1),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        p.name,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          color: theme.colorScheme.onSurface,
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).base100,
+                                      borderRadius: BorderRadius.circular(8),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: theme.shadowColor.withOpacity(
+                                            0.1,
+                                          ),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
                                         ),
-                                      ),
+                                      ],
                                     ),
-                                    IconButton(
-                                      icon: Icon(Icons.edit, color: theme.colorScheme.primary),
-                                      onPressed: () => _editProduct(p.id, p.name),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            p.name,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              color:
+                                                  theme.colorScheme.onSurface,
+                                            ),
+                                          ),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.edit,
+                                            color: Theme.of(
+                                              context,
+                                            ).primaryColor,
+                                          ),
+                                          onPressed: () =>
+                                              _editProduct(p.id, p.name),
+                                        ),
+                                        IconButton(
+                                          icon: Icon(
+                                            Icons.delete,
+                                            color: Theme.of(
+                                              context,
+                                            ).error,
+                                          ),
+                                          onPressed: () =>
+                                              _confirmDeleteProduct(p.id),
+                                        ),
+                                      ],
                                     ),
-                                    IconButton(
-                                      icon: Icon(Icons.delete, color: theme.colorScheme.error),
-                                      onPressed: () => _confirmDeleteProduct(p.id),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
+                                  );
+                                })
+                                .toList(),
                           ),
                         ),
                       ),
                     ),
 
                     // Add product row
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: productInputController,
-                              decoration: InputDecoration(
-                                labelText: 'New Product',
-                                filled: true,
-                                fillColor: theme.colorScheme.surface,
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: theme.dividerColor),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: productInputController,
+                                decoration: InputDecoration(
+                                  labelText: 'New Product',
+                                  filled: true,
+                                  fillColor: theme.colorScheme.surface,
+                                ),
+                                style: TextStyle(
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                onSubmitted: (_) => _addProduct(),
                               ),
-                              style: TextStyle(color: theme.colorScheme.onSurface),
-                              onSubmitted: (_) => _addProduct(),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          ElevatedButton(
-                            onPressed: _addProduct,
-                            child: const Text('Add'),
-                          ),
-                        ],
+                            const SizedBox(width: 12),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).primaryColor,
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).primaryContent,
+                              ),
+                              onPressed: _addProduct,
+                              child: const Text('Add'),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -296,12 +412,15 @@ class CategoryDetailDialog {
                     decoration: InputDecoration(
                       labelText: "Name",
                       filled: true,
-                      fillColor: theme.colorScheme.surface,
+                      fillColor: Theme.of(context).base200,
                     ),
-                    style: TextStyle(color: theme.colorScheme.onSurface),
+                    style: TextStyle(color: Theme.of(context).baseContent),
                   ),
                   const SizedBox(height: 12),
-                  const Align(alignment: Alignment.centerLeft, child: Text("Color")),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text("Color"),
+                  ),
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 100,
@@ -317,7 +436,12 @@ class CategoryDetailDialog {
                             decoration: BoxDecoration(
                               color: c,
                               borderRadius: BorderRadius.circular(6),
-                              border: isSelected ? Border.all(color: theme.colorScheme.onSurface, width: 3) : null,
+                              border: isSelected
+                                  ? Border.all(
+                                      color: theme.colorScheme.onSurface,
+                                      width: 3,
+                                    )
+                                  : null,
                             ),
                           ),
                         );
@@ -328,8 +452,14 @@ class CategoryDetailDialog {
                   DropdownButton<CategoryType>(
                     value: selectedType,
                     items: const [
-                      DropdownMenuItem(value: CategoryType.expense, child: Text("Expense")),
-                      DropdownMenuItem(value: CategoryType.income, child: Text("Income")),
+                      DropdownMenuItem(
+                        value: CategoryType.expense,
+                        child: Text("Expense"),
+                      ),
+                      DropdownMenuItem(
+                        value: CategoryType.income,
+                        child: Text("Income"),
+                      ),
                     ],
                     onChanged: (t) => setState(() => selectedType = t!),
                   ),
@@ -337,12 +467,23 @@ class CategoryDetailDialog {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text("Cancel")),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx2),
+                child: const Text("Cancel"),
+              ),
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Theme.of(context).primaryContent,
+                ),
                 onPressed: () {
                   final name = nameController.text.trim();
                   if (name.isNotEmpty) {
-                    context.read<CategoryNotifier>().addCategory(name, selectedColor, selectedType);
+                    context.read<CategoryNotifier>().addCategory(
+                      name,
+                      selectedColor,
+                      selectedType,
+                    );
                     Navigator.pop(ctx2);
                   }
                 },
