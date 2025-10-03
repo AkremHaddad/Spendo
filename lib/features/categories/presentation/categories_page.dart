@@ -6,8 +6,22 @@ import '../widgets/category_card.dart';
 import '../widgets/category_detail_dialog.dart';
 import '../../../core/theme/theme.dart';
 
-class CategoriesPage extends StatelessWidget {
+class CategoriesPage extends StatefulWidget {
   const CategoriesPage({super.key});
+
+  @override
+  State<CategoriesPage> createState() => _CategoriesPageState();
+}
+
+class _CategoriesPageState extends State<CategoriesPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Load categories from Firestore on page open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CategoryNotifier>().loadCategories();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +37,7 @@ class CategoriesPage extends StatelessWidget {
         categories.where((c) => c.type == CategoryType.income).toList();
 
     return Scaffold(
-      backgroundColor: Theme.of(context).base300, // adapts to light/dark
+      backgroundColor: theme.base300,
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
@@ -38,17 +52,18 @@ class CategoriesPage extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
-                      color: Theme.of(context).baseContent,
+                      color: theme.baseContent,
                     ),
                   ),
-                 ElevatedButton(
-                  onPressed: () => CategoryDetailDialog.showAddCategoryDialog(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Theme.of(context).primaryContent,
+                  ElevatedButton(
+                    onPressed: () =>
+                        CategoryDetailDialog.showAddCategoryDialog(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: theme.primaryColor,
+                      foregroundColor: theme.primaryContent,
+                    ),
+                    child: const Text("Add"),
                   ),
-                  child: const Text("Add"),
-                ),
                 ],
               ),
               const SizedBox(height: 20),
@@ -57,24 +72,21 @@ class CategoriesPage extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).primaryColor,
+                  color: theme.colorScheme.primary,
                 ),
               ),
               const SizedBox(height: 12),
               if (expenses.isEmpty)
                 Text(
                   "No expense categories yet.",
-                  style: TextStyle(color: Theme.of(context).baseContent),
+                  style: TextStyle(color: theme.baseContent),
                 ),
               Wrap(
-                spacing: 12, // horizontal space between cards
-                runSpacing: 12, // vertical space between rows
-                children: expenses.map((c) {
-                  return SizedBox(
-                    width: 300, // fixed width
-                    child: CategoryCard(category: c),
-                  );
-                }).toList(),
+                spacing: 12,
+                runSpacing: 12,
+                children: expenses
+                    .map((c) => SizedBox(width: 300, child: CategoryCard(category: c)))
+                    .toList(),
               ),
               const SizedBox(height: 30),
               Text(
@@ -89,14 +101,14 @@ class CategoriesPage extends StatelessWidget {
               if (income.isEmpty)
                 Text(
                   "No income categories yet.",
-                  style: TextStyle(color: Theme.of(context).baseContent),
+                  style: TextStyle(color: theme.baseContent),
                 ),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
-                children: income.map((c) {
-                  return SizedBox(width: 300, child: CategoryCard(category: c));
-                }).toList(),
+                children: income
+                    .map((c) => SizedBox(width: 300, child: CategoryCard(category: c)))
+                    .toList(),
               ),
             ],
           ),

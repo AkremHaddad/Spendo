@@ -41,7 +41,7 @@ class Product {
     }
 
     return Product(
-      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: json['id']?.toString() ?? DateTime.now().microsecondsSinceEpoch.toString(),
       name: json['name']?.toString() ?? '',
       isDeleted: isDeleted,
     );
@@ -68,12 +68,14 @@ class Category {
   CategoryType type;
   List<Product> products;
   bool isDeleted;
+  String userId;
 
   Category({
     required this.id,
     required this.name,
     required this.color,
     required this.type,
+    required this.userId,
     List<Product>? products,
     this.isDeleted = false,
   }) : products = products ?? [];
@@ -85,12 +87,14 @@ class Category {
     CategoryType? type,
     List<Product>? products,
     bool? isDeleted,
+    String? userId,
   }) {
     return Category(
       id: id ?? this.id,
       name: name ?? this.name,
       color: color ?? this.color,
       type: type ?? this.type,
+      userId: userId ?? this.userId,
       products: products ?? List<Product>.from(this.products),
       isDeleted: isDeleted ?? this.isDeleted,
     );
@@ -104,6 +108,7 @@ class Category {
         'type': type.toString().split('.').last,
         'products': products.map((p) => p.toJson()).toList(),
         'isDeleted': isDeleted,
+        'userId': userId,
       };
 
   factory Category.fromJson(Map<String, dynamic>? json) {
@@ -149,10 +154,11 @@ class Category {
     }
 
     return Category(
-      id: json['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      id: json['id']?.toString() ?? DateTime.now().microsecondsSinceEpoch.toString(),
       name: json['name']?.toString() ?? '',
       color: Color(colorValue),
       type: type,
+      userId: json['userId']?.toString() ?? '',
       products: products,
       isDeleted: isDeleted,
     );
@@ -163,14 +169,14 @@ class Category {
 
   @override
   String toString() {
-    return 'Category(id: $id, name: $name, type: $type, products: ${products.length}, isDeleted: $isDeleted)';
+    return 'Category(id: $id, name: $name, type: $type, userId: $userId, products: ${products.length}, isDeleted: $isDeleted)';
   }
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Category && runtimeType == other.runtimeType && id == other.id;
+      other is Category && runtimeType == other.runtimeType && id == other.id && userId == other.userId;
 
   @override
-  int get hashCode => id.hashCode;
+  int get hashCode => Object.hash(id, userId);
 }

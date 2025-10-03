@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/utils/responsive.dart';
-import 'main_page_notifier.dart';   // ✅ fixed (no extra "main_page" folder)
+import 'main_page_notifier.dart';   
 import 'mobile_navbar.dart';
 import 'web_navbar.dart';
 import 'package:flutter_svg/flutter_svg.dart';

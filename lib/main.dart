@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'package:flutter/material.dart';
 import 'core/theme/theme.dart'; 
 import 'features/main/main_page.dart';   
@@ -25,8 +26,19 @@ class SpendoApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthNotifier()),
-        ChangeNotifierProvider(create: (_) => CategoryNotifier()),
-        // add more notifiers here later if needed
+        ChangeNotifierProxyProvider<AuthNotifier, CategoryNotifier>(
+          create: (ctx) {
+            final auth = Provider.of<AuthNotifier>(ctx, listen: false);
+            return CategoryNotifier(userId: auth.userId ?? '')..loadCategories();
+          },
+          update: (ctx, auth, previous) {
+            final newUserId = auth.userId ?? '';
+            if (previous != null && previous.userId == newUserId) {
+              return previous;
+            }
+            return CategoryNotifier(userId: newUserId)..loadCategories();
+          },
+        ),
       ],
       child: Consumer<AuthNotifier>(
         builder: (context, auth, _) {
