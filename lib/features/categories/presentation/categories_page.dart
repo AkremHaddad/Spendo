@@ -50,7 +50,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   Text(
                     "Categories",
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 28,
                       fontWeight: FontWeight.bold,
                       color: theme.baseContent,
                     ),

@@ -5,6 +5,19 @@ import '../../categories/logic/categoryNotifier.dart';
 import '../data/models/cashflow.dart';
 import '../widgets/add_transaction_form.dart';
 import '../widgets/transaction_tile.dart';
+import '../../../core/theme/theme.dart';
+
+class NoScrollBarBehavior extends ScrollBehavior {
+  @override
+  Widget buildScrollbar(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
+
+  @override
+  Widget buildOverscrollIndicator(BuildContext context, Widget child, ScrollableDetails details) {
+    return child;
+  }
+}
 
 class CashFlowPage extends StatefulWidget {
   const CashFlowPage({super.key});
@@ -30,9 +43,9 @@ class _CashFlowPageState extends State<CashFlowPage> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      backgroundColor: theme.cardColor,
+      backgroundColor: Theme.of(context).base300,
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(10),
         child: Consumer2<CashflowNotifier, CategoryNotifier>(
           builder: (context, cashflowNotifier, categoryNotifier, _) {
             final transactions = cashflowNotifier.cashflows;
@@ -53,133 +66,168 @@ class _CashFlowPageState extends State<CashFlowPage> {
                     t.amount < 0)
                 .fold(0.0, (sum, t) => sum + t.amount.abs());
 
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ===== Header =====
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Cashflow',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: theme.textTheme.bodyLarge?.color,
-                        ),
+            return ScrollConfiguration(
+              behavior: NoScrollBarBehavior(),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ===== Header Container =====
+                    Container(
+                      width: 999,
+                      padding: const EdgeInsets.all(9),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Cashflow',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).baseContent,
+                            ),
+                          ),
+                          // Date container
+                          Container(
+  width: 350,
+  padding: const EdgeInsets.all(12),
+  // margin: const EdgeInsets.only(right: 300), 
+  decoration: BoxDecoration(
+    color: Theme.of(context).base100,
+    borderRadius: BorderRadius.circular(12),
+  ),
+  child: Row(
+    mainAxisSize: MainAxisSize.max, // Changed to max to fill available width
+    children: [
+      // Day number
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          '${selectedDate.day}',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).baseContent,
+          ),
+        ),
+      ),
+      const SizedBox(width: 12),
+      // Day name / month-year
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${_dayName(selectedDate.weekday)}',
+            style: TextStyle(color: Theme.of(context).baseContent, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            '${_monthName(selectedDate.month)} ${selectedDate.year}',
+            style: TextStyle(color: Theme.of(context).baseContent),
+          ),
+        ],
+      ),
+      const Spacer(), // Replaced SizedBox with Spacer to push expenses to the right
+      // Expenses
+      Column(
+        children: [
+          Text(
+            'Expenses',
+            style: TextStyle(color: Theme.of(context).baseContent, fontSize: 12),
+          ),
+          Text(
+            selectedExpenses.toStringAsFixed(2),
+            style: const TextStyle(
+              color: Colors.red,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
+    ],
+  ),
+),
+                        ],
                       ),
-                      // Date container
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: theme.primaryColor,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Day number
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: theme.primaryColorLight,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                '${selectedDate.day}',
-                                style: const TextStyle(
-                                    fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            // Day name / month-year
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${_dayName(selectedDate.weekday)}',
-                                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                                Text(
-                                  '${_monthName(selectedDate.month)} ${selectedDate.year}',
-                                  style: const TextStyle(color: Colors.white70),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 12),
-                            // Expenses
-                            Column(
-                              children: [
-                                const Text(
-                                  'Expenses',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                                ),
-                                Text(
-                                  selectedExpenses.toStringAsFixed(2),
-                                  style: const TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ===== Transactions Container =====
+                    Container(
+                      width: 999,
+                      padding: const EdgeInsets.all(9),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          double itemWidth = 307;
+                          const double spacing = 30;
+                          final double maxWidth = constraints.maxWidth;
+                          if (itemWidth > maxWidth) {
+                            itemWidth = maxWidth;
+                          }
+
+                          return Wrap(
+                            spacing: spacing,
+                            runSpacing: spacing,
+                            children: [
+                              ...transactions.map((tx) => SizedBox(
+                                    width: itemWidth,
+                                    child: TransactionTile(
+                                      cashflow: tx,
+                                      categoryNames: categoryNames,
+                                      productNames: productNames,
+                                    ),
+                                  )),
+                              // Add Transaction card
+                              SizedBox(                               
+                                width: itemWidth,
+                                child: InkWell(
+                                  onTap: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (_) => ChangeNotifierProvider.value(
+                                        value: cashflowNotifier,
+                                        child: const AddTransactionForm(),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: theme.cardColor,
+                                      border: Border.all(color: theme.dividerColor),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: theme.brightness == Brightness.light
+                                              ? Colors.black12
+                                              : Colors.black45,
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'Add Transaction',
+                                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // ===== Transactions Grid =====
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      ...transactions.map((tx) {
-                        return SizedBox(
-                          width: 300,
-                          child: TransactionTile(
-                            cashflow: tx,
-                            categoryNames: categoryNames,
-                            productNames: productNames,
-                          ),
-                        );
-                      }).toList(),
-                      // Add Transaction card
-                      SizedBox(
-                        width: 300,
-                        child: InkWell(
-                          onTap: () {
-                            showDialog(
-                              context: context,
-                              builder: (_) => ChangeNotifierProvider.value(
-                                value: cashflowNotifier,
-                                child: const AddTransactionForm(),
                               ),
-                            );
-                          },
-                          child: Container(
-                            height: 120,
-                            margin: const EdgeInsets.symmetric(vertical: 6),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: theme.cardColor,
-                              border: Border.all(color: theme.dividerColor),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Add Transaction',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ),
+                            ],
+                          );
+                        },
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                    ),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             );
           },
@@ -210,7 +258,18 @@ class _CashFlowPageState extends State<CashFlowPage> {
 
   String _monthName(int month) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
     ];
     return months[month - 1];
   }

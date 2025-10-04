@@ -32,42 +32,49 @@ class TransactionTile extends StatelessWidget {
         : cashflow.amount.toStringAsFixed(2);
 
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  margin: const EdgeInsets.symmetric(vertical: 6),
+  elevation: 6, // <-- adds shadow
+  shadowColor: Colors.black.withOpacity(0.8), // optional: adjust color/opacity
+  shape: RoundedRectangleBorder(
+    borderRadius: BorderRadius.circular(12), // rounded corners
+  ),
+  child: Padding(
+    padding: const EdgeInsets.all(12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Title row: category name (bold) and amount on the right
+        Row(
           children: [
-            // Title row: category name (bold) and amount on the right
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    categoryName,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Text(
-                  displayAmount,
-                  style: TextStyle(
-                    color: cashflow.isExpense ? Colors.red : Colors.green,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+            Expanded(
+              child: Text(
+                categoryName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
-            const SizedBox(height: 8),
-            // Product line
-            Text('Product: $productName', style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
-            const SizedBox(height: 6),
-            // Date (small)
             Text(
-              '${cashflow.date.day}/${cashflow.date.month}/${cashflow.date.year}',
-              style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+              displayAmount,
+              style: TextStyle(
+                color: cashflow.isExpense ? Colors.red : Colors.green,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
-      ),
-    );
+        const SizedBox(height: 8),
+        // Product line
+        Text('Product: $productName',
+            style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
+        const SizedBox(height: 6),
+        // Date (small)
+        // Text(
+        //   '${cashflow.date.day}/${cashflow.date.month}/${cashflow.date.year}',
+        //   style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
+        // ),
+      ],
+    ),
+  ),
+);
+
   }
 }
