@@ -1,7 +1,7 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'core/theme/theme.dart'; 
-import 'features/main/main_page.dart';   
+import 'core/theme/theme.dart';
+import 'features/main/main_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'features/auth/auth_notifier.dart';
 import 'features/auth/auth_page.dart';
 import 'features/categories/logic/categoryNotifier.dart';
+import 'features/cashflow/logic/cashflowNotifier.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +40,19 @@ class SpendoApp extends StatelessWidget {
             return CategoryNotifier(userId: newUserId)..loadCategories();
           },
         ),
+        ChangeNotifierProxyProvider<AuthNotifier, CashflowNotifier>(
+          create: (ctx) {
+            final auth = Provider.of<AuthNotifier>(ctx, listen: false);
+            return CashflowNotifier(userId: auth.userId ?? '')..loadTodayCashflows();
+          },
+          update: (ctx, auth, previous) {
+            final newUserId = auth.userId ?? '';
+            if (previous != null && previous.userId == newUserId) {
+              return previous;
+            }
+            return CashflowNotifier(userId: newUserId)..loadTodayCashflows();
+          },
+        ),
       ],
       child: Consumer<AuthNotifier>(
         builder: (context, auth, _) {
@@ -48,7 +62,9 @@ class SpendoApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: ThemeMode.system,
-            home: auth.isLoggedIn ? const MainPage() : const AuthPage(),
+            home: auth.isLoggedIn
+                ? MainPage(userId: auth.userId ?? '')
+                : const AuthPage(),
           );
         },
       ),
