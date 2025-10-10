@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../data/models/cashflow.dart';
-import '../../categories/logic/categoryNotifier.dart';
-import '../../categories/data/models/category.dart';
-
+import '../../../core/theme/theme.dart';
+import 'package:provider/provider.dart';
+import '../widgets/grid_card.dart'; // adjust path
 
 class TransactionTile extends StatelessWidget {
   final Cashflow cashflow;
   final Map<String, String>? categoryNames; // categoryId -> name
-  final Map<String, Map<String, String>>? productNames; // categoryId -> {productId -> name}
+  final Map<String, Map<String, String>>?
+  productNames; // categoryId -> {productId -> name}
 
   const TransactionTile({
     super.key,
@@ -19,62 +19,76 @@ class TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Lookup category name (fallback to id)
-    final categoryName = categoryNames?[cashflow.categoryId] ?? cashflow.categoryId;
+    final theme = Theme.of(context);
 
-    // Lookup product name (fallback to id or '-')
+    final categoryName =
+        categoryNames?[cashflow.categoryId] ?? cashflow.categoryId;
     final productName = (cashflow.productId != null)
-        ? (productNames?[cashflow.categoryId]?[cashflow.productId!] ?? cashflow.productId!)
+        ? (productNames?[cashflow.categoryId]?[cashflow.productId!] ??
+              cashflow.productId!)
         : '-';
 
     final displayAmount = cashflow.isExpense
         ? '-${cashflow.amount.abs().toStringAsFixed(2)}'
         : cashflow.amount.toStringAsFixed(2);
 
-    return Card(
-  margin: const EdgeInsets.symmetric(vertical: 6),
-  elevation: 6, // <-- adds shadow
-  shadowColor: Colors.black.withOpacity(0.8), // optional: adjust color/opacity
-  shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(12), // rounded corners
-  ),
-  child: Padding(
-    padding: const EdgeInsets.all(12),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Title row: category name (bold) and amount on the right
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                categoryName,
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ),
-            Text(
-              displayAmount,
-              style: TextStyle(
-                color: cashflow.isExpense ? Colors.red : Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        // Product line
-        Text('Product: $productName',
-            style: TextStyle(color: Theme.of(context).textTheme.bodySmall?.color)),
-        const SizedBox(height: 6),
-        // Date (small)
-        // Text(
-        //   '${cashflow.date.day}/${cashflow.date.month}/${cashflow.date.year}',
-        //   style: TextStyle(fontSize: 12, color: Theme.of(context).hintColor),
-        // ),
-      ],
-    ),
-  ),
-);
+    // tile tint uses a very subtle primary color tint; income slightly different if desired
+    final tileTint = cashflow.isExpense
+        ? Theme.of(context).primaryColorCustom.withOpacity(0.03)
+        : Theme.of(context).primaryColorCustom.withOpacity(0.04);
 
+    return GridCard(
+      height: 100,
+      backgroundColor: tileTint,
+      onTap: () {
+        // optional: show details or open edit UI on tap
+        // Navigator.push(...);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // top row
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  categoryName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              Text(
+                displayAmount,
+                style: TextStyle(
+                  color: cashflow.isExpense ? Colors.red : Colors.green,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Product: $productName',
+                  style: TextStyle(color: theme.textTheme.bodySmall?.color),
+                ),
+              ),
+              Text(
+                '${cashflow.date.day}/${cashflow.date.month}/${cashflow.date.year}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.textTheme.bodySmall?.color?.withOpacity(0.7),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

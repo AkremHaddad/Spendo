@@ -7,7 +7,7 @@ import 'web_navbar.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 // Feature pages
-import '../dashboard/dashboard_page.dart';
+import '../dashboard/presentation/dashboard_page.dart';
 import '../categories/presentation/categories_page.dart';
 import '../cashflow/presentation/cashflow_page.dart';
 import '../account/account_page.dart';

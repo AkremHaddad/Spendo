@@ -4,6 +4,7 @@ import '../logic/cashflowNotifier.dart';
 import '../../categories/logic/categoryNotifier.dart';
 import '../data/models/cashflow.dart';
 import '../../categories/data/models/category.dart';
+import '../../../core/theme/theme.dart';
 
 import 'category_dropdown.dart';
 import 'product_dropdown.dart';
@@ -11,7 +12,9 @@ import 'amount_input.dart';
 import 'date_picker_field.dart';
 
 class AddTransactionForm extends StatefulWidget {
-  const AddTransactionForm({super.key});
+  final DateTime initialDate;
+
+  const AddTransactionForm({super.key, required this.initialDate});
 
   @override
   State<AddTransactionForm> createState() => _AddTransactionFormState();
@@ -26,9 +29,21 @@ class _AddTransactionFormState extends State<AddTransactionForm> {
   final _formKey = GlobalKey<FormState>();
 
   @override
+  void initState() {
+    super.initState();
+    selectedDate = widget.initialDate;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final cashflowNotifier = Provider.of<CashflowNotifier>(context, listen: false);
-    final categoryNotifier = Provider.of<CategoryNotifier>(context, listen: false);
+    final cashflowNotifier = Provider.of<CashflowNotifier>(
+      context,
+      listen: false,
+    );
+    final categoryNotifier = Provider.of<CategoryNotifier>(
+      context,
+      listen: false,
+    );
 
     Category? currentCategory = selectedCategory != null
         ? categoryNotifier.getCategoryById(selectedCategory!)
@@ -65,6 +80,7 @@ class _AddTransactionFormState extends State<AddTransactionForm> {
                 ),
                 const SizedBox(height: 12),
                 DatePickerField(
+                  
                   selectedDate: selectedDate,
                   onDateChanged: (date) => setState(() => selectedDate = date),
                 ),
@@ -76,16 +92,25 @@ class _AddTransactionFormState extends State<AddTransactionForm> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(
+            'Cancel',
+            style: TextStyle(color: Theme.of(context).baseContent),
+          ),
         ),
         ElevatedButton(
+          style: ButtonStyle(
+            backgroundColor: MaterialStateProperty.all(
+              Theme.of(context).primaryColor,
+            ),
+          ),
           onPressed: () {
             if (_formKey.currentState!.validate() &&
                 selectedCategory != null &&
                 amount != null) {
               // Apply sign based on category type
               double finalAmount = amount!;
-              if (currentCategory != null && currentCategory.type == CategoryType.expense) {
+              if (currentCategory != null &&
+                  currentCategory.type == CategoryType.expense) {
                 finalAmount = -finalAmount;
               }
 
@@ -102,7 +127,10 @@ class _AddTransactionFormState extends State<AddTransactionForm> {
               Navigator.pop(context);
             }
           },
-          child: const Text('Add'),
+          child: Text(
+            'Add',
+            style: TextStyle(color: Theme.of(context).baseContent),
+          ),
         ),
       ],
     );

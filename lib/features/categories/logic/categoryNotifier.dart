@@ -9,12 +9,29 @@ extension FirstOrNull<E> on Iterable<E> {
 
 class CategoryNotifier extends ChangeNotifier {
   final List<Category> _categories = [];
+  // Includes deleted categories (used for reports & charts)
+  List<Category> get allCategories => List.unmodifiable(_categories);
+
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final String userId;
   StreamSubscription<QuerySnapshot>? _subscription;
 
+  // mounted guard for safe notify
+  bool _isMounted = true;
+
   CategoryNotifier({required this.userId}) {
     loadCategories();
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _isMounted = false;
+    super.dispose();
+  }
+
+  void _safeNotify() {
+    if (_isMounted) notifyListeners();
   }
 
   // ---------------- Public getters ----------------
@@ -39,19 +56,30 @@ class CategoryNotifier extends ChangeNotifier {
         .where('userId', isEqualTo: userId)
         .snapshots()
         .listen((snapshot) {
-      _categories.clear();
+      // build a new list first (avoid modifying _categories while UI rebuilding)
+      final loaded = <Category>[];
       for (var doc in snapshot.docs) {
         try {
-          final data = doc.data();
-          if (!data.containsKey('id')) {
-            data['id'] = doc.id;
+          final raw = Map<String, dynamic>.from(doc.data());
+          // ensure id exists
+          if (raw['id'] == null || raw['id'].toString().isEmpty) {
+            raw['id'] = doc.id;
           }
-          _categories.add(Category.fromJson(data));
+          final cat = Category.fromJson(raw);
+          loaded.add(cat);
         } catch (e, st) {
           debugPrint('Failed to parse category ${doc.id}: $e\n$st');
         }
       }
-      notifyListeners();
+
+      // atomically replace local list
+      _categories
+        ..clear()
+        ..addAll(loaded);
+
+      _safeNotify();
+    }, onError: (e, st) {
+      debugPrint('Category listener error: $e\n$st');
     });
   }
 
@@ -67,10 +95,9 @@ class CategoryNotifier extends ChangeNotifier {
       products: [],
     );
 
-    _categories.add(cat); // optimistic update
-    notifyListeners();
-
+    // write to Firestore (no optimistic local mutation)
     await _firestore.collection('categories').doc(newId).set(cat.toJson());
+    // snapshot listener will pick it up and update _categories
     return newId;
   }
 
@@ -78,28 +105,41 @@ class CategoryNotifier extends ChangeNotifier {
     final index = _categories.indexWhere((c) => c.id == id);
     if (index == -1) return false;
 
-    final cat = _categories[index];
-    final updatedCat = cat.copyWith(
-      name: name ?? cat.name,
-      color: color ?? cat.color,
-    );
+    final updates = <String, dynamic>{};
+    if (name != null) updates['name'] = name.trim();
+    if (color != null) updates['color'] = color.value;
 
-    _categories[index] = updatedCat; // optimistic
-    notifyListeners();
+    if (updates.isEmpty) return false;
 
-    await _firestore.collection('categories').doc(id).update(updatedCat.toJson());
-    return true;
+    try {
+      await _firestore.collection('categories').doc(id).update(updates);
+      return true;
+    } catch (e, st) {
+      debugPrint('Failed to edit category $id: $e\n$st');
+      return false;
+    }
   }
 
+  // IMPORTANT: write to Firestore first, then update local state after success
   Future<bool> softDeleteCategory(String id) async {
     final index = _categories.indexWhere((c) => c.id == id);
     if (index == -1) return false;
 
-    _categories[index].isDeleted = true; // optimistic
-    notifyListeners();
+    try {
+      await _firestore.collection('categories').doc(id).update({'isDeleted': true});
 
-    await _firestore.collection('categories').doc(id).update({'isDeleted': true});
-    return true;
+      // update local copy only after successful write (snapshot may already remove it,
+      // but this keeps local data consistent and avoids race conditions)
+      final localIndex = _categories.indexWhere((c) => c.id == id);
+      if (localIndex != -1) {
+        _categories[localIndex].isDeleted = true;
+        _safeNotify();
+      }
+      return true;
+    } catch (e, st) {
+      debugPrint('Error soft-deleting category $id: $e\n$st');
+      return false;
+    }
   }
 
   // ---------------- Products ----------------
@@ -117,56 +157,72 @@ class CategoryNotifier extends ChangeNotifier {
       isDeleted: false,
     );
 
-    _categories[catIndex].products.add(newProduct);
-    notifyListeners();
+    // fetch doc, append product and update server - safer than optimistic update
+    final docRef = _firestore.collection('categories').doc(categoryId);
+    final doc = await docRef.get();
+    if (!doc.exists) return null;
 
-    await _firestore.collection('categories').doc(categoryId).update({
-      'products': _categories[catIndex].products.map((p) => p.toJson()).toList(),
-    });
+    final raw = Map<String, dynamic>.from(doc.data()!);
+    final rawProducts = raw['products'] is List ? List.from(raw['products']) : [];
+    rawProducts.add(newProduct.toJson());
+    await docRef.update({'products': rawProducts});
 
+    // snapshot listener will update local list
     return newProduct.id;
   }
 
   Future<bool> editProduct(String categoryId, String productId, String newName) async {
-    final catIndex =
-        _categories.indexWhere((c) => c.id == categoryId && !c.isDeleted);
-    if (catIndex == -1) return false;
+    final docRef = _firestore.collection('categories').doc(categoryId);
+    final doc = await docRef.get();
+    if (!doc.exists) return false;
 
-    final pIndex = _categories[catIndex]
-        .products
-        .indexWhere((p) => p.id == productId && !p.isDeleted);
-    if (pIndex == -1) return false;
+    final raw = Map<String, dynamic>.from(doc.data()!);
+    final rawProducts = raw['products'] is List ? List.from(raw['products']) : [];
+    var changed = false;
+    final updated = rawProducts.map<Map<String, dynamic>>((e) {
+      final m = Map<String, dynamic>.from(e);
+      if (m['id'] == productId) {
+        m['name'] = newName.trim();
+        changed = true;
+      }
+      return m;
+    }).toList();
+    if (!changed) return false;
 
-    final trimmed = newName.trim();
-    if (trimmed.isEmpty) return false;
-
-    _categories[catIndex].products[pIndex].name = trimmed; // optimistic
-    notifyListeners();
-
-    await _firestore.collection('categories').doc(categoryId).update({
-      'products': _categories[catIndex].products.map((p) => p.toJson()).toList(),
-    });
-
-    return true;
+    try {
+      await docRef.update({'products': updated});
+      return true;
+    } catch (e, st) {
+      debugPrint('Failed to edit product $productId in $categoryId: $e\n$st');
+      return false;
+    }
   }
 
   Future<bool> softDeleteProduct(String categoryId, String productId) async {
-    final catIndex =
-        _categories.indexWhere((c) => c.id == categoryId && !c.isDeleted);
-    if (catIndex == -1) return false;
+    final docRef = _firestore.collection('categories').doc(categoryId);
+    final doc = await docRef.get();
+    if (!doc.exists) return false;
 
-    final pIndex =
-        _categories[catIndex].products.indexWhere((p) => p.id == productId);
-    if (pIndex == -1) return false;
+    final raw = Map<String, dynamic>.from(doc.data()!);
+    final rawProducts = raw['products'] is List ? List.from(raw['products']) : [];
+    var found = false;
+    final updated = rawProducts.map<Map<String, dynamic>>((e) {
+      final m = Map<String, dynamic>.from(e);
+      if (m['id'] == productId) {
+        m['isDeleted'] = true;
+        found = true;
+      }
+      return m;
+    }).toList();
+    if (!found) return false;
 
-    _categories[catIndex].products[pIndex].isDeleted = true; // optimistic
-    notifyListeners();
-
-    await _firestore.collection('categories').doc(categoryId).update({
-      'products': _categories[catIndex].products.map((p) => p.toJson()).toList(),
-    });
-
-    return true;
+    try {
+      await docRef.update({'products': updated});
+      return true;
+    } catch (e, st) {
+      debugPrint('Failed to soft-delete product $productId in $categoryId: $e\n$st');
+      return false;
+    }
   }
 
   // ---------------- Misc ----------------
@@ -180,17 +236,11 @@ class CategoryNotifier extends ChangeNotifier {
         debugPrint('Failed to parse category from JSON: $e\n$st');
       }
     }
-    notifyListeners();
+    _safeNotify();
   }
 
   void clearAll() {
     _categories.clear();
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
+    _safeNotify();
   }
 }

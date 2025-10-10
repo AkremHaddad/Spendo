@@ -32,7 +32,8 @@ class AppColors {
 
   static const Color base100Dark = Color(0xFF1F2937);
   static const Color base200Dark = Color(0xFF111827);
-  static const Color base300Dark = Color(0xFF0F172A);
+  static const Color base300Dark = Color.fromARGB(255, 7, 10, 18);
+  // static const Color base300Dark = Color(0xFF0F172A);
   static const Color baseContentDark = Color(0xFFF9FAFB);
 
   // Status
@@ -192,4 +193,10 @@ extension ThemeColorsExtension on ThemeData {
       brightness == Brightness.dark ? AppColors.errorContentDark : AppColors.errorContent;
   Color get white =>
       brightness == Brightness.dark ? Colors.black : Colors.white;
+  Color get cardsColor =>
+      brightness == Brightness.dark ? AppColors.primaryDark.withOpacity(0.2) : AppColors.base100;
+  Color get borderColor =>
+      brightness == Brightness.dark ? primaryColor.withOpacity(0.5) : const Color(0xFFE5E7EB);
+  Color get primarytext =>
+      AppColors.primary;
 }

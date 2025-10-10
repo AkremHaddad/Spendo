@@ -40,10 +40,14 @@ class CategoryDetailDialog {
       builder: (ctx) {
         return Consumer<CategoryNotifier>(
           builder: (ctx2, notifier, _) {
+            // latestCategory may become null if it was deleted
             final latestCategory = notifier.getCategoryById(category.id);
+
+            // If category was deleted, close the dialog safely.
             if (latestCategory == null) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                Navigator.pop(ctx2);
+                final nav = Navigator.of(ctx2);
+                if (nav.mounted && nav.canPop()) nav.pop();
               });
               return const SizedBox.shrink();
             }
@@ -53,10 +57,7 @@ class CategoryDetailDialog {
             void _addProduct() {
               final productName = productInputController.text.trim();
               if (productName.isEmpty) return;
-              notifier.addProduct(
-                latestCategory.id,
-                productName,
-              );
+              notifier.addProduct(latestCategory.id, productName);
               productInputController.clear();
             }
 
@@ -88,11 +89,7 @@ class CategoryDetailDialog {
                 ),
               );
               if (newName != null && newName.isNotEmpty) {
-                notifier.editProduct(
-                  latestCategory.id,
-                  productId,
-                  newName,
-                );
+                notifier.editProduct(latestCategory.id, productId, newName);
               }
             }
 
@@ -124,10 +121,7 @@ class CategoryDetailDialog {
                 ),
               );
               if (confirmed == true) {
-                notifier.softDeleteProduct(
-                  latestCategory.id,
-                  productId,
-                );
+                notifier.softDeleteProduct(latestCategory.id, productId);
               }
             }
 
@@ -142,7 +136,7 @@ class CategoryDetailDialog {
                   actions: [
                     TextButton(
                       style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).baseContent,
+                        foregroundColor: theme.colorScheme.onSurface,
                       ),
                       onPressed: () => Navigator.pop(confirmCtx, false),
                       child: const Text("Cancel"),
@@ -158,11 +152,24 @@ class CategoryDetailDialog {
                   ],
                 ),
               );
+
               if (confirmed == true) {
-                notifier.softDeleteCategory(
+                final success = await notifier.softDeleteCategory(
                   latestCategory.id,
                 );
-                Navigator.pop(ctx2);
+                if (success) {
+                  final nav = Navigator.of(ctx2);
+                  if (nav.mounted && nav.canPop()) nav.pop();
+                } else {
+                  // show a non-crashing error indicator
+                  if (ScaffoldMessenger.maybeOf(ctx2) != null) {
+                    ScaffoldMessenger.of(ctx2).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to delete category'),
+                      ),
+                    );
+                  }
+                }
               }
             }
 
@@ -189,15 +196,33 @@ class CategoryDetailDialog {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              latestCategory.name,
-                              style: const TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
+                            child: Stack(
+                              children: [
+                                // Stroke / Border
+                                Text(
+                                  latestCategory.name,
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    foreground: Paint()
+                                      ..style = PaintingStyle.stroke
+                                      ..strokeWidth = 2
+                                      ..color = Colors.black, // border color
+                                  ),
+                                ),
+                                // Fill
+                                Text(
+                                  latestCategory.name,
+                                  style: const TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white, // text fill color
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
+
                           // Edit button
                           Container(
                             margin: const EdgeInsets.only(right: 8),
@@ -216,7 +241,8 @@ class CategoryDetailDialog {
                                 final nameController = TextEditingController(
                                   text: latestCategory.name,
                                 );
-                                Color selectedColor = latestCategory.color; // pre-fill with current color
+                                Color selectedColor = latestCategory
+                                    .color; // pre-fill with current color
 
                                 final result = await showDialog<Map<String, dynamic>>(
                                   context: ctx2,
@@ -370,8 +396,9 @@ class CategoryDetailDialog {
                                     margin: const EdgeInsets.only(bottom: 12),
                                     padding: const EdgeInsets.all(12),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).base100,
+                                      color: Theme.of(context).cardsColor,
                                       borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Theme.of(context).borderColor),
                                       boxShadow: [
                                         BoxShadow(
                                           color: theme.shadowColor.withOpacity(
