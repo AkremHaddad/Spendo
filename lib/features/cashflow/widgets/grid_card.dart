@@ -13,7 +13,7 @@ class GridCard extends StatefulWidget {
     super.key,
     required this.child,
     this.onTap,
-    this.height = 100,
+    this.height = 90,
     this.padding = const EdgeInsets.all(14),
     this.backgroundColor,
     this.borderRadius,

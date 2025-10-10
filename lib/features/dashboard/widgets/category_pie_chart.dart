@@ -59,11 +59,15 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
 
     final total = dataMap.values.fold(0.0, (p, e) => p + e);
 
-    // 🔹 Build sections with real category colors
+    // 🔹 Sort categories by amount descending
+    final sortedEntries = dataMap.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final sortedCategoryIds = sortedEntries.map((e) => e.key).toList();
+
+    // 🔹 Build sections with real category colors (sorted)
     final sections = <PieChartSectionData>[];
-    final categoryIds = dataMap.keys.toList();
-    for (int i = 0; i < categoryIds.length; i++) {
-      final categoryId = categoryIds[i];
+    for (int i = 0; i < sortedCategoryIds.length; i++) {
+      final categoryId = sortedCategoryIds[i];
       final amount = dataMap[categoryId]!;
       final category = widget.categories.firstWhere(
         (cat) => cat.id == categoryId,
@@ -103,9 +107,10 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
       );
     }
 
-    // Legend list items (ordered to match pie slices)
-    final legendItems = categoryIds.map((id) {
-      final amount = dataMap[id]!;
+    // Legend list items (sorted by amount descending)
+    final legendItems = sortedEntries.map((entry) {
+      final id = entry.key;
+      final amount = entry.value;
       final category = widget.categories.firstWhere(
         (cat) => cat.id == id,
         orElse: () => Category(
@@ -176,57 +181,61 @@ class _CategoryPieChartState extends State<CategoryPieChart> {
 
               const SizedBox(height: 12),
 
-              // ===== Legend: fixed height, bottom-stuck, horizontally scrollable =====
+              // ===== Legend: clipped to max 3 lines height =====
               // Shows only category name by default. On hover, Tooltip pops up above item displaying
               // amount + percentage. Keeps a small visible chip for color.
-              // ===== Legend (multi-line wrapping, no overflow) =====
               Padding(
                 padding: const EdgeInsets.only(top: 2, bottom: 2),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: legendItems.map((item) {
-                    final tooltipMsg =
-                        '${item.name}\n\$${item.amount.toStringAsFixed(2)} • ${item.percent.toStringAsFixed(1)}%';
-                    return Tooltip(
-                      message: tooltipMsg,
-                      preferBelow: false,
-                      verticalOffset: 8,
-                      showDuration: const Duration(milliseconds: 1800),
-                      waitDuration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).cardColor,
-                        borderRadius: BorderRadius.circular(6),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.12),
-                            blurRadius: 6,
-                            offset: const Offset(0, 3),
-                          ),
-                        ],
-                      ),
-                      textStyle: TextStyle(
-                        color: Theme.of(context).textTheme.bodyMedium?.color,
-                        fontSize: 12,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              color: item.color,
-                              borderRadius: BorderRadius.circular(2),
+                child: Container(
+                  height: 70,
+                  clipBehavior: Clip.hardEdge,
+                  decoration: const BoxDecoration(),
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: legendItems.map((item) {
+                      final tooltipMsg =
+                          '${item.name}\n\$${item.amount.toStringAsFixed(2)} • ${item.percent.toStringAsFixed(1)}%';
+                      return Tooltip(
+                        message: tooltipMsg,
+                        preferBelow: false,
+                        verticalOffset: 8,
+                        showDuration: const Duration(milliseconds: 1800),
+                        waitDuration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).cardColor,
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.12),
+                              blurRadius: 6,
+                              offset: const Offset(0, 3),
                             ),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(item.name, style: const TextStyle(fontSize: 13)),
-                        ],
-                      ),
-                    );
-                  }).toList(),
+                          ],
+                        ),
+                        textStyle: TextStyle(
+                          color: Theme.of(context).textTheme.bodyMedium?.color,
+                          fontSize: 12,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: item.color,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(item.name, style: const TextStyle(fontSize: 13)),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
             ],

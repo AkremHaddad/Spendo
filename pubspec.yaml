@@ -42,6 +42,7 @@ dependencies:
   cloud_firestore: ^6.0.2
   intl: ^0.20.2
   fl_chart: ^1.1.1
+  carousel_slider: ^5.1.1
 
 dev_dependencies:
   flutter_test:
@@ -66,6 +67,12 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/appbar.svg
+    - assets/images/light1.png
+    - assets/images/light2.png
+    - assets/images/light3.png
+    - assets/images/dark1.png
+    - assets/images/dark2.png
+    - assets/images/dark3.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

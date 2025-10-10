@@ -1,29 +1,51 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
-class AmountInput extends StatelessWidget {
-  final ValueChanged<double?> onChanged;
+class AmountInput extends StatefulWidget {
+  final Function(double?) onChanged;
+  final double? initialAmount;
 
-  const AmountInput({super.key, required this.onChanged});
+  const AmountInput({
+    super.key,
+    required this.onChanged,
+    this.initialAmount,
+  });
+
+  @override
+  State<AmountInput> createState() => _AmountInputState();
+}
+
+class _AmountInputState extends State<AmountInput> {
+  late TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(
+      text: widget.initialAmount?.toString() ?? '',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return TextFormField(
-      decoration: const InputDecoration(labelText: 'Amount'),
+      controller: _controller,
       keyboardType: TextInputType.number,
-      inputFormatters: [
-        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')), // only digits and dot
-      ],
-      validator: (v) =>
-          (v == null || double.tryParse(v) == null) ? 'Enter a valid number' : null,
-      onChanged: (v) {
-        final parsed = double.tryParse(v);
-        if (parsed != null) {
-          onChanged(parsed.abs()); // always positive
-        } else {
-          onChanged(null);
-        }
+      decoration: const InputDecoration(
+        labelText: 'Amount',
+        border: OutlineInputBorder(),
+      ),
+      validator: (value) =>
+          (value == null || value.isEmpty) ? 'Enter an amount' : null,
+      onChanged: (value) {
+        final parsed = double.tryParse(value);
+        widget.onChanged(parsed);
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
   }
 }

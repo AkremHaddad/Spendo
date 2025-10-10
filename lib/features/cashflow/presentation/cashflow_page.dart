@@ -241,7 +241,7 @@ class _CashFlowPageState extends State<CashFlowPage> {
                               SizedBox(
                                 width: itemWidth,
                                 child: GridCard(
-                                  height: 100,
+                                  height: 90,
                                   onTap: () {
                                     showDialog(
                                       context: context,

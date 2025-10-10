@@ -15,11 +15,10 @@ class CategoryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        
+
         border: Border.all(color: Theme.of(context).borderColor, width: 1),
       ),
       child: Material(
-        
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
@@ -36,14 +35,12 @@ class CategoryCard extends StatelessWidget {
               color: Theme.of(context).cardsColor,
 
               borderRadius: BorderRadius.circular(8),
-              
+
               boxShadow: [
                 BoxShadow(
-                  color: theme.brightness == Brightness.light
-                      ? Colors.black12
-                      : Colors.black45, // darker shadow in dark mode
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
                 ),
               ],
             ),
