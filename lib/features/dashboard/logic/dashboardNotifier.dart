@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../cashflow/data/models/cashflow.dart';
 import '../data/models/balance.dart';
+import '../../../core/utils/money.dart';
 
 class DashboardNotifier extends ChangeNotifier {
   final String userId;
@@ -18,57 +19,49 @@ class DashboardNotifier extends ChangeNotifier {
   bool get loading => _loading;
 
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _balanceSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _cashflowsSub;
 
   DashboardNotifier({required this.userId}) {
-    loadDashboardData().then((_) => _startBalanceListener());
+    _loading = true;
+    _startBalanceListener();
+    _startCashflowsListener();
   }
 
-  /// Load cashflows and ensure a single balance doc exists at balances/{userId}
-  Future<void> loadDashboardData() async {
-    _loading = true;
-    notifyListeners();
+  /// Live-updating cashflows list. This used to be a one-shot `.get()`,
+  /// which is why the dashboard's charts only updated after a manual
+  /// refresh (reopening the tab/page rebuilt the notifier) — switching to
+  /// `.snapshots().listen()` makes it reactive like the balance already was.
+  void _startCashflowsListener() {
+    _cashflowsSub?.cancel();
+    final query = firestore
+        .collection('cashflows')
+        .where('userId', isEqualTo: userId)
+        .where('isDeleted', isEqualTo: false)
+        .orderBy('date', descending: true);
 
-    try {
-      final snapshot = await firestore
-          .collection('cashflows')
-          .where('userId', isEqualTo: userId)
-          .where('isDeleted', isEqualTo: false)
-          .orderBy('date', descending: true)
-          .get();
-
+    _cashflowsSub = query.snapshots().listen((snapshot) {
       _cashflows = snapshot.docs
-          .map((doc) => Cashflow.fromJson(doc.data() as Map<String, dynamic>)
-              .copyWith(id: doc.id))
+          .map((doc) => Cashflow.fromJson(doc.data()).copyWith(id: doc.id))
           .toList();
-    } catch (e, st) {
-      debugPrint('Error loading cashflows: $e\n$st');
-      _cashflows = [];
-    }
-
-    try {
-      final docRef = firestore.collection('balances').doc(userId);
-      final docSnap = await docRef.get();
-
-      if (docSnap.exists && docSnap.data() != null) {
-        _balanceObj = Balance.fromJson(docSnap.data() as Map<String, dynamic>, id: docSnap.id);
-      } else {
-        // Create the doc with the userId as the doc id so it's unique and predictable
-        final newBalance = Balance(id: userId, userId: userId, amount: 0.0);
-        await docRef.set(newBalance.toJson());
-        _balanceObj = newBalance;
-      }
-    } catch (e, st) {
-      debugPrint('Error loading/creating balance doc: $e\n$st');
-      _balanceObj = Balance(id: userId, userId: userId, amount: 0.0);
-    } finally {
       _loading = false;
       notifyListeners();
-    }
+    }, onError: (err) {
+      debugPrint('Error listening to cashflows: $err');
+      _loading = false;
+      notifyListeners();
+    });
   }
 
   Future<void> _startBalanceListener() async {
     await _balanceSub?.cancel();
     final docRef = firestore.collection('balances').doc(userId);
+
+    // Ensure the doc exists before subscribing, same as before.
+    final docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      final newBalance = Balance(id: userId, userId: userId, amount: 0.0);
+      await docRef.set(newBalance.toJson());
+    }
 
     _balanceSub = docRef.snapshots().listen((snap) {
       if (snap.exists && snap.data() != null) {
@@ -93,22 +86,29 @@ class DashboardNotifier extends ChangeNotifier {
   Future<void> updateBalance(double newAmount) async {
     try {
       final docRef = firestore.collection('balances').doc(userId);
-      await docRef.set({'userId': userId, 'amount': newAmount}, SetOptions(merge: true));
+      await docRef.set(
+        {'userId': userId, 'amountMillimes': dinarsToMillimes(newAmount)},
+        SetOptions(merge: true),
+      );
       // local state will be updated by the snapshot listener quickly
     } catch (e, st) {
       debugPrint('Error updating balance: $e\n$st');
     }
   }
 
-  /// Force reload everything
+  /// Force reload everything — the listeners are live, so this just
+  /// restarts them (useful e.g. after switching users).
   Future<void> reload() async {
-    await loadDashboardData();
+    _loading = true;
+    notifyListeners();
     await _startBalanceListener();
+    _startCashflowsListener();
   }
 
   @override
   void dispose() {
     _balanceSub?.cancel();
+    _cashflowsSub?.cancel();
     super.dispose();
   }
 

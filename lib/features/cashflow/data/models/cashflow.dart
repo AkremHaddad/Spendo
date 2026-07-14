@@ -1,19 +1,39 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../../core/utils/money.dart';
 
 class Cashflow {
   String id;
   String categoryId;
   String? productId;
-  double amount;
+
+  /// Source of truth for the amount, in millimes (1 TND = 1000 millimes).
+  /// See `core/utils/money.dart` for why this isn't a `double`.
+  int amountMillimes;
+
   DateTime date;
   String userId;
   bool isDeleted;
+
+  /// Dinar-denominated view of [amountMillimes], for call sites that just
+  /// want a plain number (charts, existing widgets). Positive = income,
+  /// negative = expense, same convention as before.
+  double get amount => millimesToDinars(amountMillimes);
 
   Cashflow({
     required this.id,
     required this.categoryId,
     this.productId,
-    required this.amount,
+    required double amount,
+    required this.date,
+    required this.userId,
+    this.isDeleted = false,
+  }) : amountMillimes = dinarsToMillimes(amount);
+
+  Cashflow.fromMillimes({
+    required this.id,
+    required this.categoryId,
+    this.productId,
+    required this.amountMillimes,
     required this.date,
     required this.userId,
     this.isDeleted = false,
@@ -28,11 +48,11 @@ class Cashflow {
     String? userId,
     bool? isDeleted,
   }) {
-    return Cashflow(
+    return Cashflow.fromMillimes(
       id: id ?? this.id,
       categoryId: categoryId ?? this.categoryId,
       productId: productId ?? this.productId,
-      amount: amount ?? this.amount,
+      amountMillimes: amount != null ? dinarsToMillimes(amount) : amountMillimes,
       date: date ?? this.date,
       userId: userId ?? this.userId,
       isDeleted: isDeleted ?? this.isDeleted,
@@ -44,7 +64,7 @@ class Cashflow {
       'id': id,
       'categoryId': categoryId,
       'productId': productId,
-      'amount': amount,
+      'amountMillimes': amountMillimes,
       'date': Timestamp.fromDate(date),
       'userId': userId,
       'isDeleted': isDeleted,
@@ -65,11 +85,22 @@ class Cashflow {
       parsedDate = DateTime.tryParse(rawDate) ?? parsedDate;
     }
 
-    final dynamic amountRaw = json['amount'];
-    double parsedAmount = 0;
-    if (amountRaw is int) parsedAmount = amountRaw.toDouble();
-    if (amountRaw is double) parsedAmount = amountRaw;
-    if (amountRaw is String) parsedAmount = double.tryParse(amountRaw) ?? 0;
+    // Prefer the new integer-millimes field; fall back to the legacy
+    // double `amount` field for documents written before this refactor.
+    int parsedMillimes = 0;
+    final dynamic millimesRaw = json['amountMillimes'];
+    if (millimesRaw is int) {
+      parsedMillimes = millimesRaw;
+    } else if (millimesRaw is double) {
+      parsedMillimes = millimesRaw.round();
+    } else {
+      final dynamic legacyAmount = json['amount'];
+      double legacyDouble = 0;
+      if (legacyAmount is int) legacyDouble = legacyAmount.toDouble();
+      if (legacyAmount is double) legacyDouble = legacyAmount;
+      if (legacyAmount is String) legacyDouble = double.tryParse(legacyAmount) ?? 0;
+      parsedMillimes = dinarsToMillimes(legacyDouble);
+    }
 
     final dynamic isDeletedRaw = json['isDeleted'];
     bool isDeleted = false;
@@ -81,11 +112,11 @@ class Cashflow {
       isDeleted = (isDeletedRaw.toLowerCase() == 'true');
     }
 
-    return Cashflow(
+    return Cashflow.fromMillimes(
       id: json['id']?.toString() ?? DateTime.now().microsecondsSinceEpoch.toString(),
       categoryId: json['categoryId']?.toString() ?? '',
       productId: json['productId']?.toString(),
-      amount: parsedAmount,
+      amountMillimes: parsedMillimes,
       date: parsedDate,
       userId: json['userId']?.toString() ?? '',
       isDeleted: isDeleted,
@@ -94,7 +125,7 @@ class Cashflow {
 
   @override
   String toString() {
-    return 'Cashflow(id: $id, categoryId: $categoryId, productId: $productId, amount: $amount, date: $date, userId: $userId, isDeleted: $isDeleted)';
+    return 'Cashflow(id: $id, categoryId: $categoryId, productId: $productId, amountMillimes: $amountMillimes, date: $date, userId: $userId, isDeleted: $isDeleted)';
   }
 
   @override
@@ -108,8 +139,8 @@ class Cashflow {
 
 extension CashflowHelpers on Cashflow {
   /// Returns true if this cashflow is income
-  bool get isIncome => amount > 0;
+  bool get isIncome => amountMillimes > 0;
 
   /// Returns true if this cashflow is expense
-  bool get isExpense => amount < 0;
+  bool get isExpense => amountMillimes < 0;
 }

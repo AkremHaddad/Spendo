@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/models/cashflow.dart';
+import '../../../core/utils/money.dart';
 
 class CashflowNotifier extends ChangeNotifier {
   DateTime? _lastSelectedDate;
@@ -17,6 +18,19 @@ void setLastSelectedDate(DateTime date) {
   List<Cashflow> get cashflows => _cashflows;
 
   CashflowNotifier({required this.userId});
+
+  /// Reads a balance doc's amount as millimes, falling back to the legacy
+  /// double `amount` field for docs written before the money refactor.
+  int _balanceMillimesFrom(Map<String, dynamic> data) {
+    final millimesRaw = data['amountMillimes'];
+    if (millimesRaw is int) return millimesRaw;
+    if (millimesRaw is double) return millimesRaw.round();
+    final legacyAmount = data['amount'];
+    final legacyDouble = (legacyAmount is int)
+        ? legacyAmount.toDouble()
+        : (legacyAmount is double ? legacyAmount : 0.0);
+    return dinarsToMillimes(legacyDouble);
+  }
 
   /// =====================
   /// Load cashflows for a specific date
@@ -51,32 +65,28 @@ void setLastSelectedDate(DateTime date) {
       final cashflowRef = firestore.collection('cashflows').doc(); // new id
       final balanceRef = firestore.collection('balances').doc(userId); // single doc per user
 
-      // prepare amount delta depending on income/expense:
-      // assume cashflow.amount is positive for both; we will add for income, subtract for expense
-      final double delta = cashflow.isIncome ? cashflow.amount : -cashflow.amount.abs();
+      // Integer millimes delta: add for income, subtract for expense.
+      // cashflow.amountMillimes already carries the sign (positive = income,
+      // negative = expense — see AddTransactionForm), so this is just the
+      // signed value itself; no float arithmetic involved.
+      final int deltaMillimes = cashflow.amountMillimes;
 
-      final result = await firestore.runTransaction((transaction) async {
+      await firestore.runTransaction((transaction) async {
         final balanceSnap = await transaction.get(balanceRef);
-        double currentBalance = 0.0;
+        int currentMillimes = 0;
 
         if (balanceSnap.exists && balanceSnap.data() != null) {
-          final amt = balanceSnap.data()!['amount'];
-          currentBalance = (amt is int) ? amt.toDouble() : (amt as double);
+          currentMillimes = _balanceMillimesFrom(balanceSnap.data()!);
         } else {
-          // If missing, initialize
-          transaction.set(balanceRef, {'userId': userId, 'amount': 0.0});
-          currentBalance = 0.0;
+          transaction.set(balanceRef, {'userId': userId, 'amountMillimes': 0});
         }
 
-        final newBalance = currentBalance + delta;
+        final newMillimes = currentMillimes + deltaMillimes;
 
-        // set cashflow doc (include userId and timestamps as needed)
         final newCashflow = cashflow.copyWith(id: cashflowRef.id);
 
         transaction.set(cashflowRef, newCashflow.toJson());
-        transaction.update(balanceRef, {'amount': newBalance});
-
-        return newBalance;
+        transaction.update(balanceRef, {'amountMillimes': newMillimes});
       });
 
       // update local cache and notify - dashboard will also pick up update via its listener
@@ -102,36 +112,33 @@ void setLastSelectedDate(DateTime date) {
       final cashflowRef = firestore.collection('cashflows').doc(id);
       final balanceRef = firestore.collection('balances').doc(userId);
 
-      final result = await firestore.runTransaction((transaction) async {
+      await firestore.runTransaction((transaction) async {
         final cfSnap = await transaction.get(cashflowRef);
 
         if (!cfSnap.exists || cfSnap.data() == null) {
           throw Exception('Cashflow missing');
         }
 
-        // read amount from cashflow
         final data = cfSnap.data()! as Map<String, dynamic>;
-        final amtRaw = data['amount'];
-        final bool isIncome = data['isIncome'] == true;
-        final double cfAmount = (amtRaw is int) ? amtRaw.toDouble() : (amtRaw as double);
-
-        // compute delta to subtract (reverse)
-        final double delta = isIncome ? -cfAmount : cfAmount.abs();
+        // BUGFIX: this used to read a stored `isIncome` field that
+        // `Cashflow.toJson()` never actually wrote, so it was always false —
+        // every deleted cashflow (including income) was reversed as if it
+        // were an expense, silently corrupting the balance. Income/expense
+        // is encoded by the sign of the amount itself (see AddTransactionForm),
+        // so derive it from that, the same convention the rest of the app uses.
+        final int cfMillimes = _balanceMillimesFrom(data);
 
         final balanceSnap = await transaction.get(balanceRef);
         if (!balanceSnap.exists || balanceSnap.data() == null) {
           throw Exception('Balance missing');
         }
 
-        final balRaw = balanceSnap.data()!['amount'];
-        double currentBalance = (balRaw is int) ? balRaw.toDouble() : (balRaw as double);
+        final currentMillimes = _balanceMillimesFrom(balanceSnap.data()!);
+        // Reverse the original delta (which was exactly cfMillimes, signed).
+        final newMillimes = currentMillimes - cfMillimes;
 
-        final newBalance = currentBalance + delta;
-
-        transaction.update(balanceRef, {'amount': newBalance});
+        transaction.update(balanceRef, {'amountMillimes': newMillimes});
         transaction.update(cashflowRef, {'isDeleted': true});
-
-        return newBalance;
       });
 
       // update local cache & notify
