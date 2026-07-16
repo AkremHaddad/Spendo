@@ -3,28 +3,35 @@ import 'package:provider/provider.dart';
 import '../logic/categoryNotifier.dart';
 import '../data/models/category.dart';
 import '../../../core/theme/theme.dart';
+import '../../../core/utils/responsive.dart';
 
 const List<Color> kCategoryColors = [
-  Color(0xFFF44336),
-  Color(0xFFE91E63),
-  Color(0xFF9C27B0),
-  Color(0xFF673AB7),
-  Color(0xFF3F51B5),
-  Color(0xFF2196F3),
-  Color(0xFF03A9F4),
-  Color(0xFF00BCD4),
-  Color(0xFF009688),
-  Color(0xFF4CAF50),
-  Color(0xFF8BC34A),
-  Color(0xFFCDDC39),
-  Color(0xFFFFEB3B),
-  Color(0xFFFFC107),
-  Color(0xFFFF9800),
-  Color(0xFFFF5722),
-  Color(0xFF795548),
-  Color(0xFF9E9E9E),
-  Color(0xFF607D8B),
-  Color(0xFF000000),
+  Color.fromARGB(255, 212, 33, 30), // Red
+  Color(0xFFEF5350), // Light Red
+  Color(0xFFD81B60), // Pink
+
+  Color(0xFFFF6F00), // Orange
+  Color(0xFFFB8C00), // Deep Orange
+
+  Color(0xFFFDD835), // Yellow
+  Color(0xFFC0CA33), // Lime
+  Color(0xFF9E9D24), // Olive
+
+  Color(0xFF7CB342), // Light Green
+  Color(0xFF43A047), // Green
+  Color(0xFF00897B), // Teal
+
+  Color(0xFF00ACC1), // Cyan
+  Color(0xFF42A5F5), // Light Blue
+  Color(0xFF1E88E5), // Blue
+  Color(0xFF3949AB), // Indigo
+
+  Color(0xFF5E35B1), // Deep Purple
+  Color(0xFF8E24AA), // Purple
+
+  Color(0xFF6D4C41), // Brown
+  Color(0xFF546E7A), // Blue Grey
+  Color(0xFF000000), // Black
 ];
 
 class CategoryDetailDialog {
@@ -34,6 +41,7 @@ class CategoryDetailDialog {
     Category category,
   ) {
     final productInputController = TextEditingController();
+    final isMobileView = isMobile(context);
 
     showDialog(
       context: context,
@@ -179,7 +187,7 @@ class CategoryDetailDialog {
                   maxWidth: MediaQuery.of(context).size.width < 600
                       ? MediaQuery.of(context).size.width * 0.9
                       : 500,
-                  maxHeight: MediaQuery.of(context).size.height * 0.85,
+                  maxHeight: !isMobileView ? MediaQuery.of(context).size.height * 0.85 : MediaQuery.of(context).size.height * 0.5,
                 ),
                 child: Column(
                   children: [
@@ -282,9 +290,9 @@ class CategoryDetailDialog {
                                               ),
                                               const SizedBox(height: 8),
                                               SizedBox(
-                                                height: 100,
+                                                height: isMobileView ? 230 : 100,
                                                 child: GridView.count(
-                                                  crossAxisCount: 10,
+                                                  crossAxisCount: isMobileView ? 5 : 10,
                                                   crossAxisSpacing: 8,
                                                   mainAxisSpacing: 8,
                                                   children: kCategoryColors.map((
@@ -504,6 +512,7 @@ class CategoryDetailDialog {
     final nameController = TextEditingController();
     Color selectedColor = kCategoryColors.first;
     CategoryType selectedType = CategoryType.expense;
+    final isMobileView = isMobile(context);
 
     showDialog(
       context: context,
@@ -534,9 +543,9 @@ class CategoryDetailDialog {
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: 100,
-                    child: GridView.count(
-                      crossAxisCount: 10,
+                    height: isMobileView ? 230 : 100,
+                                                child: GridView.count(
+                                                  crossAxisCount: isMobileView ? 5 : 10,
                       crossAxisSpacing: 8,
                       mainAxisSpacing: 8,
                       children: kCategoryColors.map((c) {
@@ -560,19 +569,9 @@ class CategoryDetailDialog {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButton<CategoryType>(
-                    value: selectedType,
-                    items: const [
-                      DropdownMenuItem(
-                        value: CategoryType.expense,
-                        child: Text("Expense"),
-                      ),
-                      DropdownMenuItem(
-                        value: CategoryType.income,
-                        child: Text("Income"),
-                      ),
-                    ],
-                    onChanged: (t) => setState(() => selectedType = t!),
+                  _TypeToggle(
+                    selected: selectedType,
+                    onChanged: (t) => setState(() => selectedType = t),
                   ),
                 ],
               ),
@@ -606,6 +605,50 @@ class CategoryDetailDialog {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Expense/Income segmented toggle — replaces a plain DropdownButton with
+/// something that matches the rest of the app's pill-styled controls
+/// (e.g. the Expense/Income tabs on the categories page itself).
+class _TypeToggle extends StatelessWidget {
+  final CategoryType selected;
+  final ValueChanged<CategoryType> onChanged;
+
+  const _TypeToggle({required this.selected, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(child: _segment(theme, 'Expense', CategoryType.expense)),
+        const SizedBox(width: 8),
+        Expanded(child: _segment(theme, 'Income', CategoryType.income)),
+      ],
+    );
+  }
+
+  Widget _segment(ThemeData theme, String label, CategoryType type) {
+    final active = selected == type;
+    return GestureDetector(
+      onTap: () => onChanged(type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: active ? theme.ink : Colors.transparent,
+          border: Border.all(color: active ? Colors.transparent : theme.border),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: theme.sans(13, weight: FontWeight.w600,
+              color: active ? theme.surface : theme.ink2),
+        ),
       ),
     );
   }
