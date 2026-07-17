@@ -1,51 +1,102 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../main/main_page_notifier.dart';
 import '../../shared/nav/nav_items.dart';
+import '../../core/theme/theme.dart';
 
 class MobileNavbar extends StatelessWidget {
   final MainPageNotifier notifier;
-  const MobileNavbar({super.key, required this.notifier});
+  final VoidCallback? onFabTap;
+
+  const MobileNavbar({super.key, required this.notifier, this.onFabTap});
 
   @override
   Widget build(BuildContext context) {
-    // Using BottomAppBar + IconButtons leaves room for a center FAB.
-    return BottomAppBar(
-      shape: const CircularNotchedRectangle(),
-      notchMargin: 6,
-      color: Theme.of(context).primaryColor,
+    final theme = Theme.of(context);
+    final selected = notifier.selectedIndex;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.surface,
+        border: Border(top: BorderSide(color: theme.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _NavBtn(item: navItems[0], active: selected == 0, onTap: () => notifier.setIndex(0)),
+          _NavBtn(item: navItems[1], active: selected == 1, onTap: () => notifier.setIndex(1)),
+
+          // Centre FAB
+          GestureDetector(
+            onTap: onFabTap,
+            child: Container(
+              width: 54,
+              height: 54,
+              margin: const EdgeInsets.only(bottom: 4),
+              decoration: BoxDecoration(
+                color: theme.accentColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.accentSoftColor,
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Icon(Icons.add_rounded, color: theme.accentInkColor, size: 26),
+            ),
+          ),
+
+          _NavBtn(item: navItems[2], active: selected == 2, onTap: () => notifier.setIndex(2)),
+          _NavBtn(item: navItems[3], active: selected == 3, onTap: () => notifier.setIndex(3)),
+        ],
+      ),
+    );
+  }
+}
+
+class _NavBtn extends StatelessWidget {
+  final NavItem item;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _NavBtn({required this.item, required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        height: 60,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+        width: 56,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // first two
-            IconButton(
-              icon: Icon(navItems[0].icon, color: _iconColor(context, 0, notifier.selectedIndex)),
-              onPressed: () => notifier.setIndex(0),
+            Icon(
+              active ? item.activeIcon : item.icon,
+              size: 22,
+              color: active ? theme.accentInkSoftColor : theme.ink3,
             ),
-            IconButton(
-              icon: Icon(navItems[1].icon, color: _iconColor(context, 1, notifier.selectedIndex)),
-              onPressed: () => notifier.setIndex(1),
-            ),
-
-            const SizedBox(width: 48), // space for FAB
-
-            // last two
-            IconButton(
-              icon: Icon(navItems[2].icon, color: _iconColor(context, 2, notifier.selectedIndex)),
-              onPressed: () => notifier.setIndex(2),
-            ),
-            IconButton(
-              icon: Icon(navItems[3].icon, color: _iconColor(context, 3, notifier.selectedIndex)),
-              onPressed: () => notifier.setIndex(3),
+            const SizedBox(height: 2),
+            Text(
+              item.label,
+              style: GoogleFonts.instrumentSans(
+                fontSize: 10.5,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                color: active ? theme.accentInkSoftColor : theme.ink3,
+              ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Color _iconColor(BuildContext context, int index, int selected) {
-    return index == selected ? Colors.white : Colors.white70;
   }
 }

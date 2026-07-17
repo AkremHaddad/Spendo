@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import '../../core/theme/theme.dart';
 import 'auth_notifier.dart';
+import '../main/main_page.dart'; 
 
 class AuthPage extends StatefulWidget {
   const AuthPage({super.key});
@@ -11,6 +13,7 @@ class AuthPage extends StatefulWidget {
 }
 
 class _AuthPageState extends State<AuthPage> {
+  final TextEditingController usernameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
   bool isLogin = true;
@@ -41,27 +44,23 @@ class _AuthPageState extends State<AuthPage> {
 
   // 🖥️ Desktop Layout
   Widget _buildDesktopLayout(
-      BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
     return Row(
       children: [
         // Left side - content
         Expanded(
           flex: 5,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 60),
+            padding: const EdgeInsets.only(top: 40, left: 80, right: 80),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(
-                  'Spendo',
-                  style: TextStyle(
-                    fontSize: 38,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 48),
+                _buildTitle(colorScheme, 38, isDark),
+                const SizedBox(height: 24),
                 Text(
                   'Join Spendo and track\nyour expenses',
                   style: TextStyle(
@@ -79,7 +78,7 @@ class _AuthPageState extends State<AuthPage> {
                     color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7),
                   ),
                 ),
-                const SizedBox(height: 48),
+                const SizedBox(height: 24),
                 _buildForm(context, theme, colorScheme),
               ],
             ),
@@ -92,7 +91,6 @@ class _AuthPageState extends State<AuthPage> {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              // Half circle slightly off-screen to the right
               Positioned(
                 right: -400,
                 top: 0,
@@ -105,38 +103,37 @@ class _AuthPageState extends State<AuthPage> {
                   ),
                 ),
               ),
-              // Hero image centered visually
               Align(
-  alignment: Alignment.centerRight,
-  child: Padding(
-    padding: const EdgeInsets.only(right: 100),
-    child: Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(5), // Rounded corners
-        border: Border.all(
-          color: Theme.of(context).borderColor, // Border color
-          width: 1, // Border width
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15), // Shadow color
-            blurRadius: 20, // Shadow blur
-            offset: const Offset(0, 8), // Shadow position
-            spreadRadius: 2, // Shadow spread
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(5), // Match container border radius
-        child: Image.asset(
-          isDark
-              ? 'assets/images/dark3.png'
-              : 'assets/images/light3.png',
-        ),
-      ),
-    ),
-  ),
-),
+                alignment: Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 100),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(5),
+                      border: Border.all(
+                        color: Theme.of(context).borderColor,
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(5),
+                      child: Image.asset(
+                        isDark
+                            ? 'assets/images/dark3.png'
+                            : 'assets/images/light3.png',
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -146,20 +143,17 @@ class _AuthPageState extends State<AuthPage> {
 
   // 📱 Mobile Layout
   Widget _buildMobileLayout(
-      BuildContext context, ThemeData theme, ColorScheme colorScheme, bool isDark) {
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme colorScheme,
+    bool isDark,
+  ) {
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Spendo',
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: colorScheme.primary,
-            ),
-          ),
+          _buildTitle(colorScheme, 32, isDark),
           const SizedBox(height: 32),
           Text(
             'Join Spendo and track your expenses',
@@ -179,8 +173,6 @@ class _AuthPageState extends State<AuthPage> {
             ),
           ),
           const SizedBox(height: 40),
-
-          // Hero image + circle on mobile
           SizedBox(
             height: 220,
             child: Stack(
@@ -218,9 +210,32 @@ class _AuthPageState extends State<AuthPage> {
     );
   }
 
+  Widget _buildTitle(ColorScheme colorScheme, double fontSize, bool isDark) {
+    return Row(
+      children: [
+        SvgPicture.asset(
+          isDark ? 'assets/images/logoDark.svg' : 'assets/images/logoLight.svg',
+          height: fontSize,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          'Spendo',
+          style: TextStyle(
+            fontSize: fontSize,
+            fontWeight: FontWeight.bold,
+            color: colorScheme.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
   // 🧩 Auth form widget
   Widget _buildForm(
-      BuildContext context, ThemeData theme, ColorScheme colorScheme) {
+    BuildContext context,
+    ThemeData theme,
+    ColorScheme colorScheme,
+  ) {
     final auth = Provider.of<AuthNotifier>(context, listen: false);
 
     return Container(
@@ -242,34 +257,105 @@ class _AuthPageState extends State<AuthPage> {
                 style: TextStyle(color: colorScheme.error, fontSize: 14),
               ),
             ),
-          TextField(
-            controller: emailController,
-            decoration: InputDecoration(
-              labelText: 'Email',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: colorScheme.outline),
-              ),
-              filled: true,
-              fillColor: theme.cardsColor,
+
+          // 🔹 Animated form fields
+          AnimatedCrossFade(
+            firstChild: Column(
+              children: [
+                // Email
+                const SizedBox(height: 8),
+
+                TextField(
+                  controller: emailController,
+                  
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    filled: true,
+                    fillColor: theme.cardsColor,
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                // Password
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    filled: true,
+                    fillColor: theme.cardsColor,
+                  ),
+                ),
+              ],
             ),
-            keyboardType: TextInputType.emailAddress,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: passwordController,
-            obscureText: true,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: colorScheme.outline),
-              ),
-              filled: true,
-              fillColor: theme.cardsColor,
+            secondChild: Column(
+              children: [
+                // Username
+                const SizedBox(height: 8),
+
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: TextField(
+                    controller: usernameController,
+                    decoration: InputDecoration(
+                      labelText: 'Username',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: colorScheme.outline),
+                      ),
+                      filled: true,
+                      fillColor: theme.cardsColor,
+                    ),
+                  ),
+                ),
+                // Email
+                TextField(
+                  controller: emailController,
+                  decoration: InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    filled: true,
+                    fillColor: theme.cardsColor,
+                  ),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 16),
+                // Password
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: colorScheme.outline),
+                    ),
+                    filled: true,
+                    fillColor: theme.cardsColor,
+                  ),
+                ),
+              ],
             ),
+            crossFadeState: isLogin
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            duration: const Duration(milliseconds: 300),
           ),
+
           const SizedBox(height: 24),
+
+          // Login/Signup button
           SizedBox(
             width: double.infinity,
             height: 54,
@@ -283,16 +369,35 @@ class _AuthPageState extends State<AuthPage> {
                       });
                       final email = emailController.text.trim();
                       final password = passwordController.text.trim();
+                      final username = usernameController.text.trim();
+
                       String? error;
                       if (isLogin) {
                         error = await auth.loginWithEmail(email, password);
                       } else {
-                        error = await auth.signUpWithEmail(email, password);
+                        if (username.isEmpty) {
+                          error = 'Username is required';
+                        } else {
+                          error = await auth.signUpWithEmail(
+                            email,
+                            password,
+                            username,
+                          );
+                        }
                       }
+
                       setState(() {
                         loading = false;
                         errorMessage = error;
                       });
+                      if (error == null) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                MainPage(userId: auth.userId!),
+                          ),
+                        );
+                      }
                     },
               style: ElevatedButton.styleFrom(
                 backgroundColor: colorScheme.primary,
@@ -320,7 +425,43 @@ class _AuthPageState extends State<AuthPage> {
                     ),
             ),
           ),
+
           const SizedBox(height: 16),
+
+          // Google login button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              icon: Image.asset('assets/images/google.png', height: 24),
+              label: Text('Continue with Google', style: TextStyle(color: Theme.of(context).baseContent),),
+              onPressed: loading
+                  ? null
+                  : () async {
+                      setState(() {
+                        loading = true;
+                        errorMessage = null;
+                      });
+                      final error = await auth.loginWithGoogle();
+                      setState(() {
+                        loading = false;
+                        errorMessage = error;
+                      });
+                      if (error == null) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                MainPage(userId: auth.userId!),
+                          ),
+                        );
+                      }
+                    },
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Toggle login/signup
           TextButton(
             onPressed: () {
               setState(() {
@@ -333,7 +474,7 @@ class _AuthPageState extends State<AuthPage> {
                   ? "Don't have an account? Sign Up"
                   : "Already have an account? Login",
               style: TextStyle(
-                color: colorScheme.primary,
+                color: Theme.of(context).baseContent,
                 fontWeight: FontWeight.w500,
               ),
             ),

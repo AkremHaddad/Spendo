@@ -29,7 +29,7 @@ class _AmountInputState extends State<AmountInput> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: _controller,
-      keyboardType: TextInputType.number,
+      keyboardType: TextInputType.text,
       decoration: const InputDecoration(
         labelText: 'Amount',
         border: OutlineInputBorder(),

@@ -132,3 +132,6 @@ linux/flutter/ephemeral/
 migrate_working_dir/
 
 lib/firebase_options.dart
+
+# Firebase CLI deploy cache
+.firebase/

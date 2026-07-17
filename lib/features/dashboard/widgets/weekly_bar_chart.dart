@@ -83,6 +83,7 @@ class _WeeklyBarChartState extends State<WeeklyBarChart> {
                             getTooltipItem: (group, groupIndex, rod, rodIndex) {
                               final amount = rod.toY;
                               final weekStart = weekStarts[group.x.toInt()];
+                              
                               final label =
                                   'Week of ${DateFormat.MMMd().format(weekStart)}\n\$${amount.toStringAsFixed(2)}';
                               return BarTooltipItem(

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../categories/logic/categoryNotifier.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class AuthNotifier extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  late final GoogleSignIn _googleSignIn;
 
   bool _isLoggedIn = false;
   bool get isLoggedIn => _isLoggedIn;
@@ -13,35 +16,41 @@ class AuthNotifier extends ChangeNotifier {
   String? get userId => currentUser?.uid;
 
   AuthNotifier() {
-    // Listen to auth state changes
     _auth.authStateChanges().listen((user) {
       _isLoggedIn = user != null;
       notifyListeners();
     });
+    if (!kIsWeb) {
+      _googleSignIn = GoogleSignIn.instance;
+    }
   }
 
   // ---------------- SIGN UP ----------------
-  Future<String?> signUpWithEmail(String email, String password) async {
+  Future<String?> signUpWithEmail(String email, String password, String username) async {
     try {
       final userCred = await _auth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
       final user = userCred.user;
+      if (user == null) return 'User creation failed';
 
-      _isLoggedIn = user != null;
-      notifyListeners();
+      // Save username to Firestore
+      await _firestore.collection('users').doc(user.uid).set({
+        'email': email,
+        'username': username,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-      // If new user, create default categories
+      // Update Firebase Auth profile
+      await user.updateDisplayName(username);
+
+      // Create default categories if new user
       final isNew = userCred.additionalUserInfo?.isNewUser ?? false;
-      if (isNew && user != null) {
-        try {
-          await _createDefaultCategoriesForUser(user.uid);
-        } catch (e, st) {
-          debugPrint('Failed to create default categories: $e\n$st');
-        }
-      }
+      if (isNew) await _createDefaultCategoriesForUser(user.uid);
 
+      _isLoggedIn = true;
+      notifyListeners();
       return null; // success
     } on FirebaseAuthException catch (e) {
       return e.message;
@@ -53,13 +62,57 @@ class AuthNotifier extends ChangeNotifier {
   // ---------------- LOGIN ----------------
   Future<String?> loginWithEmail(String email, String password) async {
     try {
-      await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      await _auth.signInWithEmailAndPassword(email: email, password: password);
       _isLoggedIn = true;
       notifyListeners();
-      return null; // success
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  // ---------------- GOOGLE LOGIN ----------------
+  Future<String?> loginWithGoogle() async {
+    try {
+      UserCredential userCred;
+      if (kIsWeb) {
+        // Web-specific code
+        GoogleAuthProvider googleProvider = GoogleAuthProvider();
+        // You can add scopes if needed
+        // googleProvider.addScope('https://www.googleapis.com/auth/contacts.readonly');
+        userCred = await _auth.signInWithPopup(googleProvider);
+      } else {
+        // Mobile-specific code
+        final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+        if (googleUser == null) return 'Google sign-in aborted';
+
+        final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+          // accessToken: googleAuth.accessToken,  // Optional, idToken is sufficient for Google
+        );
+        userCred = await _auth.signInWithCredential(credential);
+      }
+
+      final user = userCred.user!;
+      final isNew = userCred.additionalUserInfo?.isNewUser ?? false;
+
+      // Store Firestore data
+      final userDoc = _firestore.collection('users').doc(user.uid);
+      if (isNew) {
+        await userDoc.set({
+          'email': user.email,
+          'username': user.displayName ?? 'User',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        await _createDefaultCategoriesForUser(user.uid);
+      }
+
+      _isLoggedIn = true;
+      notifyListeners();
+      return null;
     } on FirebaseAuthException catch (e) {
       return e.message;
     } catch (e) {
@@ -75,102 +128,99 @@ class AuthNotifier extends ChangeNotifier {
   }
 
   // ---------------- DEFAULT CATEGORIES ----------------
-  // Inside AuthNotifier
+  Future<void> _createDefaultCategoriesForUser(String uid) async {
+    final db = FirebaseFirestore.instance;
+    final col = db.collection('categories');
 
-Future<void> _createDefaultCategoriesForUser(String uid) async {
-  final db = FirebaseFirestore.instance;
-  final col = db.collection('categories');
+    // Check if user already has categories
+    final existing = await col.where('userId', isEqualTo: uid).limit(1).get();
+    if (existing.docs.isNotEmpty) return;
 
-  // Check if user already has categories
-  final existing = await col.where('userId', isEqualTo: uid).limit(1).get();
-  if (existing.docs.isNotEmpty) return;
+    // Helper to generate Firestore IDs
+    String genId() => col.doc().id;
 
-  // Helper to generate Firestore IDs
-  String genId() => col.doc().id;
+    // Default categories & products
+    final defaults = <Map<String, dynamic>>[
+      // Expenses
+      {
+        'name': 'Housing / Rent',
+        'color': 0xFFF44336,
+        'type': 'expense',
+        'products': ['Rent', 'Mortgage', 'Utilities', 'Insurance'],
+      },
+      {
+        'name': 'Food',
+        'color': 0xFFFF9800,
+        'type': 'expense',
+        'products': ['Groceries', 'Dining Out', 'Snacks'],
+      },
+      {
+        'name': 'Transport',
+        'color': 0xFF2196F3,
+        'type': 'expense',
+        'products': ['Gas', 'Public Transport', 'Car Maintenance'],
+      },
+      {
+        'name': 'Health',
+        'color': 0xFF4CAF50,
+        'type': 'expense',
+        'products': ['Doctor', 'Medicine', 'Gym'],
+      },
+      {
+        'name': 'Entertainment',
+        'color': 0xFF9C27B0,
+        'type': 'expense',
+        'products': ['Movies', 'Subscriptions'],
+      },
+      {
+        'name': 'Shopping',
+        'color': 0xFF795548,
+        'type': 'expense',
+        'products': ['Clothes', 'Electronics'],
+      },
+      // Income
+      {
+        'name': 'Salary',
+        'color': 0xFF00BCD4,
+        'type': 'income',
+        'products': ['Base Salary', 'Bonus'],
+      },
+      {
+        'name': 'Business',
+        'color': 0xFF607D8B,
+        'type': 'income',
+        'products': ['Freelance', 'Side Hustle'],
+      },
+      {
+        'name': 'Investments',
+        'color': 0xFF3F51B5,
+        'type': 'income',
+        'products': ['Dividends', 'Interest'],
+      },
+    ];
 
-  // Default categories & products
-  final defaults = <Map<String, dynamic>>[
-    // Expenses
-    {
-      'name': 'Housing / Rent',
-      'color': 0xFFF44336,
-      'type': 'expense',
-      'products': ['Rent', 'Mortgage', 'Utilities', 'Insurance'],
-    },
-    {
-      'name': 'Food',
-      'color': 0xFFFF9800,
-      'type': 'expense',
-      'products': ['Groceries', 'Dining Out', 'Snacks'],
-    },
-    {
-      'name': 'Transport',
-      'color': 0xFF2196F3,
-      'type': 'expense',
-      'products': ['Gas', 'Public Transport', 'Car Maintenance'],
-    },
-    {
-      'name': 'Health',
-      'color': 0xFF4CAF50,
-      'type': 'expense',
-      'products': ['Doctor', 'Medicine', 'Gym'],
-    },
-    {
-      'name': 'Entertainment',
-      'color': 0xFF9C27B0,
-      'type': 'expense',
-      'products': ['Movies', 'Subscriptions'],
-    },
-    {
-      'name': 'Shopping',
-      'color': 0xFF795548,
-      'type': 'expense',
-      'products': ['Clothes', 'Electronics'],
-    },
-    // Income
-    {
-      'name': 'Salary',
-      'color': 0xFF00BCD4,
-      'type': 'income',
-      'products': ['Base Salary', 'Bonus'],
-    },
-    {
-      'name': 'Business',
-      'color': 0xFF607D8B,
-      'type': 'income',
-      'products': ['Freelance', 'Side Hustle'],
-    },
-    {
-      'name': 'Investments',
-      'color': 0xFF3F51B5,
-      'type': 'income',
-      'products': ['Dividends', 'Interest'],
-    },
-  ];
+    // Write all categories & products
+    for (final catData in defaults) {
+      final catId = genId();
+      final products = (catData['products'] as List<String>).map((name) {
+        return {
+          'id': genId(),
+          'name': name,
+          'isDeleted': false,
+        };
+      }).toList();
 
-  // Write all categories & products
-  for (final catData in defaults) {
-    final catId = genId();
-    final products = (catData['products'] as List<String>).map((name) {
-      return {
-        'id': genId(),
-        'name': name,
+      final docData = {
+        'id': catId,
+        'name': catData['name'],
+        'color': catData['color'],
+        'type': catData['type'],
         'isDeleted': false,
+        'userId': uid,
+        'products': products,
       };
-    }).toList();
 
-    final docData = {
-      'id': catId,
-      'name': catData['name'],
-      'color': catData['color'],
-      'type': catData['type'],
-      'isDeleted': false,
-      'userId': uid,
-      'products': products,
-    };
-
-    await col.doc(catId).set(docData);
+      await col.doc(catId).set(docData);
+    }
   }
-}
-
 }
