@@ -184,23 +184,123 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _coachIdx = 0;
 
-  final _coaches = const [
-    (
-      headline: 'Track every dollar 💰',
-      body: 'Logging your expenses daily gives you a clear picture of where your money is going.',
-      tint: 'mint',
-    ),
-    (
-      headline: 'Watch your biggest category',
-      body: 'Your top expense category is your biggest lever — small changes there have the most impact.',
-      tint: 'butter',
-    ),
-    (
-      headline: 'Savings compound fast 📈',
-      body: 'Even small consistent savings snowball over time. You\'re already on the right track.',
-      tint: 'lavender',
-    ),
-  ];
+  /// Builds coach tips from this user's actual data (biggest category,
+  /// spend pace vs income, savings rate, weekday spending pattern, logging
+  /// gaps) instead of a fixed set of generic messages. Falls back to a
+  /// single generic tip only when there's not enough data yet (e.g. a
+  /// brand-new account) for any of the data-driven ones to apply.
+  List<({String headline, String body, String tint})> _buildCoachTips(
+    DashboardNotifier notifier,
+    CategoryNotifier catNotifier,
+    Map<String, double> spendByCat,
+    double income,
+    double expenses,
+  ) {
+    final tips = <({String headline, String body, String tint})>[];
+    final now = DateTime.now();
+
+    // Biggest expense category this month.
+    if (spendByCat.isNotEmpty && expenses > 0) {
+      final top = spendByCat.entries.reduce((a, b) => a.value > b.value ? a : b);
+      final cat = catNotifier.getCategoryById(top.key);
+      final pct = (top.value / expenses * 100).round();
+      if (cat != null && pct >= 25) {
+        tips.add((
+          headline: '${catEmoji(cat.name)} ${cat.name} is your biggest spend',
+          body: '${cat.name} is $pct% of your spending this month '
+              '(\$${top.value.toStringAsFixed(0)}) — that\'s where a small cut goes furthest.',
+          tint: 'butter',
+        ));
+      }
+    }
+
+    // End-of-month pace vs income (same math as the forecast card).
+    if (income > 0 && now.day > 0 && expenses > 0) {
+      final avgDaily = expenses / now.day;
+      final daysInMonth = DateUtils.getDaysInMonth(now.year, now.month);
+      final projected = avgDaily * daysInMonth;
+      final projectedPct = (projected / income * 100).round();
+      if (projected > income) {
+        tips.add((
+          headline: 'On pace to go over this month',
+          body: 'At your current rate you\'ll spend \$${projected.toStringAsFixed(0)} this month '
+              '— $projectedPct% of your income. Dial back to stay in the green.',
+          tint: 'coral',
+        ));
+      } else if (projectedPct <= 70) {
+        tips.add((
+          headline: 'Comfortably under pace 🎉',
+          body: 'Your spending projects to \$${projected.toStringAsFixed(0)} this month, '
+              'only $projectedPct% of income — plenty of room to save.',
+          tint: 'mint',
+        ));
+      }
+    }
+
+    // Savings rate this month.
+    if (income > 0) {
+      final savings = income - expenses;
+      final rate = (savings / income * 100).round();
+      if (savings > 0) {
+        tips.add((
+          headline: 'Saving $rate% this month',
+          body: 'You\'ve saved \$${savings.toStringAsFixed(0)} of \$${income.toStringAsFixed(0)} '
+              'income so far — keep logging to see it compound.',
+          tint: 'lavender',
+        ));
+      }
+    }
+
+    // Weekday spending pattern (same 8-week window as the rhythm chart).
+    final today = DateTime(now.year, now.month, now.day);
+    final windowStart = today.subtract(const Duration(days: 55));
+    final weekdayTotals = List<double>.filled(7, 0);
+    final weekdayCounts = List<int>.filled(7, 0);
+    for (int i = 0; i <= 55; i++) {
+      weekdayCounts[windowStart.add(Duration(days: i)).weekday - 1]++;
+    }
+    for (final cf in notifier.cashflows) {
+      if (!cf.isExpense) continue;
+      final day = DateTime(cf.date.year, cf.date.month, cf.date.day);
+      if (day.isBefore(windowStart) || day.isAfter(today)) continue;
+      weekdayTotals[day.weekday - 1] += cf.amount.abs();
+    }
+    final weekdayAvgs = List.generate(7, (i) => weekdayCounts[i] > 0 ? weekdayTotals[i] / weekdayCounts[i] : 0.0);
+    final peakAvg = weekdayAvgs.fold(0.0, (p, e) => e > p ? e : p);
+    if (peakAvg > 0) {
+      const labels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      final peakDay = labels[weekdayAvgs.indexOf(peakAvg)];
+      tips.add((
+        headline: '$peakDay hits your wallet hardest',
+        body: 'You spend about \$${peakAvg.toStringAsFixed(0)} on average each $peakDay '
+            '— plan ahead if you want to change that pattern.',
+        tint: 'sky',
+      ));
+    }
+
+    // Logging-gap nudge.
+    if (notifier.cashflows.isNotEmpty) {
+      final lastDate = notifier.cashflows.map((c) => c.date).reduce((a, b) => a.isAfter(b) ? a : b);
+      final daysSince = today.difference(DateTime(lastDate.year, lastDate.month, lastDate.day)).inDays;
+      if (daysSince >= 2) {
+        tips.add((
+          headline: 'It\'s been $daysSince days since your last entry',
+          body: 'Logging regularly is what makes these numbers useful — jump into Cashflow and catch up.',
+          tint: 'coral',
+        ));
+      }
+    }
+
+    if (tips.isEmpty) {
+      tips.add((
+        headline: 'Track every dollar 💰',
+        body: 'Logging your expenses daily gives you a clear picture of where your money is going.',
+        tint: 'mint',
+      ));
+    }
+
+    return tips;
+  }
 
   void _showEditBalanceDialog(BuildContext context, DashboardNotifier notifier) {
     final ctrl = TextEditingController(text: notifier.balance.toStringAsFixed(2));
@@ -262,6 +362,9 @@ class _DashboardPageState extends State<DashboardPage> {
     }
     final maxCatSpend = spendByCat.values.fold(0.0, max);
 
+    final coaches = _buildCoachTips(notifier, catNotifier, spendByCat, income, expenses);
+    final coach = coaches[_coachIdx % coaches.length];
+
     // Recent transactions (last 5)
     final recent = notifier.last7DaysCashflows.take(5).toList();
 
@@ -314,8 +417,8 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(height: 12),
                       _StreakRow(context, mobile),
                       SizedBox(height: mobile ? 12 : 18),
-                      _CoachCard(context, _coaches[_coachIdx], () {
-                        setState(() => _coachIdx = (_coachIdx + 1) % _coaches.length);
+                      _CoachCard(context, coach, () {
+                        setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
                       }, mobile),
                     ])
                   : compact
@@ -324,8 +427,8 @@ class _DashboardPageState extends State<DashboardPage> {
                           const SizedBox(height: 18),
                           _StreakColumn(context, income, expenses, mobile),
                           SizedBox(height: mobile ? 12 : 18),
-                          _CoachCard(context, _coaches[_coachIdx], () {
-                            setState(() => _coachIdx = (_coachIdx + 1) % _coaches.length);
+                          _CoachCard(context, coach, () {
+                            setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
                           }, mobile),
                         ])
                       : // Note: deliberately NOT using IntrinsicHeight+stretch
@@ -355,8 +458,8 @@ class _DashboardPageState extends State<DashboardPage> {
                               children: [
                                 _StreakColumn(context, income, expenses, mobile),
                                 SizedBox(height: mobile ? 12 : 18),
-                                _CoachCard(context, _coaches[_coachIdx], () {
-                                  setState(() => _coachIdx = (_coachIdx + 1) % _coaches.length);
+                                _CoachCard(context, coach, () {
+                                  setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
                                 }, mobile),
                               ],
                             ),
