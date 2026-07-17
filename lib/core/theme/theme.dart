@@ -45,19 +45,25 @@ class SpendoColors {
   static const Color roseBg      = Color(0xFFF4D6E0);
   static const Color roseInk     = Color(0xFFA24876);
 
-  // Semantic tints — dark
-  static const Color mintBgDk      = Color(0x1F9CD8B8);
-  static const Color mintInkDk     = Color(0xFF9CD8B8);
-  static const Color coralBgDk     = Color(0x1FFFC1AE);
-  static const Color coralInkDk    = Color(0xFFFFC1AE);
-  static const Color butterBgDk    = Color(0x1FF2C97A);
-  static const Color butterInkDk   = Color(0xFFF2C97A);
-  static const Color lavenderBgDk  = Color(0x1FC8B6E2);
-  static const Color lavenderInkDk = Color(0xFFC8B6E2);
-  static const Color skyBgDk       = Color(0x1FA7CCE8);
-  static const Color skyInkDk      = Color(0xFFA7CCE8);
-  static const Color roseBgDk      = Color(0x1FE9A8C2);
-  static const Color roseInkDk     = Color(0xFFE9A8C2);
+  // Semantic tints — dark. InkDk stays the vivid variant (same hue as the
+  // light ink, boosted saturation, ~60% lightness) — it's used for LIGHT
+  // theme now (see the ThemeColorsExtension getters below, which deliberately
+  // swap ink but not bg). BgDk is a low-alpha wash of the *muted* ink
+  // (mintInk etc.) since that's the value dark theme's ink getters actually
+  // resolve to — keeping the translucent wash color-matched to the ink it
+  // sits behind.
+  static const Color mintBgDk      = Color(0x1F2D6948);
+  static const Color mintInkDk     = Color(0xFF6AC894);
+  static const Color coralBgDk     = Color(0x1FB04638);
+  static const Color coralInkDk    = Color(0xFFD66A5C);
+  static const Color butterBgDk    = Color(0x1F8C6315);
+  static const Color butterInkDk   = Color(0xFFF0B442);
+  static const Color lavenderBgDk  = Color(0x1F5E4A95);
+  static const Color lavenderInkDk = Color(0xFF8772C0);
+  static const Color skyBgDk       = Color(0x1F2F6A95);
+  static const Color skyInkDk      = Color(0xFF5CA3D6);
+  static const Color roseBgDk      = Color(0x1FA24876);
+  static const Color roseInkDk     = Color(0xFFC66C9A);
 }
 
 // ─── App Themes ──────────────────────────────────────────────────────────────
@@ -245,19 +251,27 @@ extension ThemeColorsExtension on ThemeData {
   Color get accentSoftColor   => _dark ? SpendoColors.accentSoftDark : SpendoColors.accentSoft;
   Color get accentInkSoftColor => _dark ? SpendoColors.accentInkSoftDk : SpendoColors.accentInkSoft;
 
-  // Tints
-  Color get tintMintBg      => _dark ? SpendoColors.mintBgDk      : SpendoColors.mintBg;
-  Color get tintMintInk     => _dark ? SpendoColors.mintInkDk     : SpendoColors.mintInk;
-  Color get tintCoralBg     => _dark ? SpendoColors.coralBgDk     : SpendoColors.coralBg;
-  Color get tintCoralInk    => _dark ? SpendoColors.coralInkDk    : SpendoColors.coralInk;
-  Color get tintButterBg    => _dark ? SpendoColors.butterBgDk    : SpendoColors.butterBg;
-  Color get tintButterInk   => _dark ? SpendoColors.butterInkDk   : SpendoColors.butterInk;
-  Color get tintLavenderBg  => _dark ? SpendoColors.lavenderBgDk  : SpendoColors.lavenderBg;
-  Color get tintLavenderInk => _dark ? SpendoColors.lavenderInkDk : SpendoColors.lavenderInk;
-  Color get tintSkyBg       => _dark ? SpendoColors.skyBgDk       : SpendoColors.skyBg;
-  Color get tintSkyInk      => _dark ? SpendoColors.skyInkDk      : SpendoColors.skyInk;
-  Color get tintRoseBg      => _dark ? SpendoColors.roseBgDk      : SpendoColors.roseBg;
-  Color get tintRoseInk     => _dark ? SpendoColors.roseInkDk     : SpendoColors.roseInk;
+  // Tints. Ink is swapped (dark theme uses the non-Dk value, light theme
+  // uses the Dk value) per Akram's explicit call — that's what made category
+  // icons/chart colors correct. Bg is NOT swapped: it stays dark→BgDk
+  // (a low-alpha translucent wash over the dark background) and light→Bg
+  // (a solid pastel fill) — these two constants aren't a light/dark pair of
+  // the same thing, BgDk is deliberately translucent so a solid pastel card
+  // fill doesn't show up looking like a stray light-mode card. Swapping Bg
+  // the same way as Ink is what made income/expense tags, the AI coach card,
+  // achievements, etc. look "light" in dark theme.
+  Color get tintMintBg      => _dark ? SpendoColors.mintBgDk    : SpendoColors.mintBg;
+  Color get tintMintInk     => _dark ? SpendoColors.mintInk     : SpendoColors.mintInkDk;
+  Color get tintCoralBg     => _dark ? SpendoColors.coralBgDk   : SpendoColors.coralBg;
+  Color get tintCoralInk    => _dark ? SpendoColors.coralInk    : SpendoColors.coralInkDk;
+  Color get tintButterBg    => _dark ? SpendoColors.butterBgDk  : SpendoColors.butterBg;
+  Color get tintButterInk   => _dark ? SpendoColors.butterInk   : SpendoColors.butterInkDk;
+  Color get tintLavenderBg  => _dark ? SpendoColors.lavenderBgDk : SpendoColors.lavenderBg;
+  Color get tintLavenderInk => _dark ? SpendoColors.lavenderInk : SpendoColors.lavenderInkDk;
+  Color get tintSkyBg       => _dark ? SpendoColors.skyBgDk     : SpendoColors.skyBg;
+  Color get tintSkyInk      => _dark ? SpendoColors.skyInk      : SpendoColors.skyInkDk;
+  Color get tintRoseBg      => _dark ? SpendoColors.roseBgDk    : SpendoColors.roseBg;
+  Color get tintRoseInk     => _dark ? SpendoColors.roseInk     : SpendoColors.roseInkDk;
 
   // Card decoration helper
   BoxDecoration get cardDecoration => BoxDecoration(

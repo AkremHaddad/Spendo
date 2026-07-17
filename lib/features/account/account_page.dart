@@ -8,6 +8,7 @@ import '../../core/utils/responsive.dart';
 import '../main/theme_notifier.dart';
 import '../dashboard/logic/dashboardNotifier.dart';
 import '../cashflow/data/models/cashflow.dart';
+import '../categories/logic/categoryNotifier.dart';
 
 // ─── Card helper ──────────────────────────────────────────────────────────────
 Widget _card({
@@ -43,13 +44,12 @@ class AccountPage extends StatelessWidget {
     final theme = Theme.of(context);
     final themeNotifier = context.watch<ThemeNotifier>();
     final dashNotifier = context.watch<DashboardNotifier>();
+    final catNotifier = context.watch<CategoryNotifier>();
     final user = FirebaseAuth.instance.currentUser;
     final mobile = isMobile(context);
 
-    final isDark = themeNotifier.themeMode == ThemeMode.dark;
     final displayName = user?.displayName ?? user?.email?.split('@').first ?? 'User';
     final email = user?.email ?? '';
-    final initials = _initials(displayName);
 
     // Lifetime stats
     final txCount = dashNotifier.cashflows.length;
@@ -59,37 +59,20 @@ class AccountPage extends StatelessWidget {
         .fold(0.0, (s, c) => s + c.amount);
 
     final stats = [
-      (emoji: '💰', value: '\$${balance.toStringAsFixed(0)}', label: 'Net worth'),
-      (emoji: '📈', value: '\$${totalIncome.toStringAsFixed(0)}', label: 'Total income'),
-      (emoji: '🧾', value: '$txCount', label: 'Transactions'),
-      (emoji: '🔥', value: 'Active', label: 'Status'),
+      (icon: Icons.account_balance_wallet_rounded, value: '\$${balance.toStringAsFixed(0)}', label: 'Net worth'),
+      (icon: Icons.trending_up_rounded, value: '\$${totalIncome.toStringAsFixed(0)}', label: 'Total income'),
+      (icon: Icons.receipt_long_rounded, value: '$txCount', label: 'Transactions'),
     ];
 
     // Settings rows
     final settings = [
       (
-        icon: Icons.notifications_outlined,
-        title: 'Notifications',
-        sub: 'Daily nudges, weekly summary',
-        tintBg: theme.tintButterBg,
-        tintInk: theme.tintButterInk,
-        onTap: null as VoidCallback?,
-      ),
-      (
-        icon: isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-        title: isDark ? 'Switch to Light mode' : 'Switch to Dark mode',
-        sub: 'Toggle app appearance',
+        icon: Icons.dark_mode_outlined,
+        title: 'Appearance',
+        sub: _themeModeLabel(themeNotifier.themeMode),
         tintBg: theme.tintLavenderBg,
         tintInk: theme.tintLavenderInk,
-        onTap: () => themeNotifier.toggleTheme() as VoidCallback?,
-      ),
-      (
-        icon: Icons.privacy_tip_outlined,
-        title: 'Privacy & data',
-        sub: 'Export, anonymize, delete',
-        tintBg: theme.tintMintBg,
-        tintInk: theme.tintMintInk,
-        onTap: null as VoidCallback?,
+        onTap: () => _showThemeModeDialog(context, themeNotifier) as VoidCallback?,
       ),
     ];
 
@@ -108,67 +91,17 @@ class AccountPage extends StatelessWidget {
             // ── Page header ──────────────────────────────────────────────
             Text('Your account', style: theme.serif(mobile ? 28 : 36)),
             const SizedBox(height: 4),
-            Text('Settings, achievements, plan',
+            Text('Settings & achievements',
                 style: theme.sans(13.5, color: theme.ink2)),
 
-            SizedBox(height: mobile ? 16 : 20),
+            SizedBox(height: mobile ? 14 : 18),
 
-            // ── Profile hero ─────────────────────────────────────────────
-            _card(
-              context: context,
-              padding: EdgeInsets.all(mobile ? 22 : 32),
-              child: Stack(
-                children: [
-                  // Decorative gradient blob
-                  Positioned(
-                    right: -60,
-                    top: -60,
-                    child: Container(
-                      width: 200,
-                      height: 200,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            theme.tintLavenderBg,
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  mobile
-                      ? Column(
-                          children: [
-                            _Avatar(initials: initials, size: 96),
-                            const SizedBox(height: 16),
-                            _ProfileInfo(
-                              displayName: displayName,
-                              email: email,
-                              mobile: mobile,
-                              onLogout: () => _logout(context),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          children: [
-                            _Avatar(initials: initials, size: 120),
-                            const SizedBox(width: 24),
-                            Expanded(
-                              child: _ProfileInfo(
-                                displayName: displayName,
-                                email: email,
-                                mobile: mobile,
-                                onLogout: () => _logout(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                ],
-              ),
-            ),
+            // ── Profile (kept minimal on purpose — just who's signed in) ──
+            Text(displayName, style: theme.serif(mobile ? 20 : 24)),
+            const SizedBox(height: 2),
+            Text(email, style: theme.sans(13, color: theme.ink2)),
 
-            SizedBox(height: mobile ? 12 : 16),
+            SizedBox(height: mobile ? 14 : 18),
 
             // ── Stats row ────────────────────────────────────────────────
             Row(
@@ -184,7 +117,7 @@ class AccountPage extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.emoji, style: const TextStyle(fontSize: 22)),
+                          Icon(s.icon, size: 20, color: theme.ink2),
                           const SizedBox(height: 6),
                           Text(
                             s.value,
@@ -235,14 +168,21 @@ class AccountPage extends StatelessWidget {
                           color: theme.tintButterBg,
                           borderRadius: BorderRadius.circular(999),
                         ),
-                        child: Text('🏆 ${_level(txCount)}',
-                            style: theme.sans(12, color: theme.tintButterInk, weight: FontWeight.w600)),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.emoji_events_rounded, size: 14, color: theme.tintButterInk),
+                            const SizedBox(width: 4),
+                            Text(_level(txCount),
+                                style: theme.sans(12, color: theme.tintButterInk, weight: FontWeight.w600)),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   _AchievementsGrid(
-                      txCount: txCount, balance: balance, mobile: mobile),
+                      dashNotifier: dashNotifier, catNotifier: catNotifier, mobile: mobile),
                 ],
               ),
             ),
@@ -255,16 +195,15 @@ class AccountPage extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
               child: Column(
                 children: [
-                  ...settings.asMap().entries.map((e) {
-                    final i = e.key;
-                    final row = e.value;
+                  // Sign out always follows, so every mapped row here gets a divider.
+                  ...settings.map((row) {
                     return _SettingsRow(
                       icon: row.icon,
                       title: row.title,
                       sub: row.sub,
                       tintBg: row.tintBg,
                       tintInk: row.tintInk,
-                      showDivider: i < settings.length - 1,
+                      showDivider: true,
                       onTap: row.onTap ?? () {},
                     );
                   }),
@@ -294,14 +233,6 @@ class AccountPage extends StatelessWidget {
     );
   }
 
-  String _initials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return name.substring(0, name.length.clamp(0, 2)).toUpperCase();
-  }
-
   String _level(int txCount) {
     if (txCount >= 200) return 'Level 5';
     if (txCount >= 100) return 'Level 4';
@@ -311,114 +242,113 @@ class AccountPage extends StatelessWidget {
   }
 }
 
-// ─── Sub-widgets ─────────────────────────────────────────────────────────────
-
-class _Avatar extends StatelessWidget {
-  final String initials;
-  final double size;
-  const _Avatar({required this.initials, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: size, height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [theme.tintLavenderBg, theme.tintRoseBg],
-        ),
-        border: Border.all(color: theme.surface, width: 4),
-        boxShadow: [BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 24, offset: const Offset(0, 8))],
-      ),
-      child: Center(
-        child: Text(
-          initials,
-          style: GoogleFonts.instrumentSerif(
-            fontSize: size * 0.38,
-            color: theme.ink,
-          ),
-        ),
-      ),
-    );
+String _themeModeLabel(ThemeMode mode) {
+  switch (mode) {
+    case ThemeMode.light:
+      return 'Light';
+    case ThemeMode.dark:
+      return 'Dark';
+    case ThemeMode.system:
+      return 'System';
   }
 }
 
-class _ProfileInfo extends StatelessWidget {
-  final String displayName, email;
-  final bool mobile;
-  final VoidCallback onLogout;
+/// Explicit 3-way picker (Light/Dark/System) — replaces a single ambiguous
+/// toggle that couldn't represent "system" and silently forced light/dark
+/// on first tap regardless of which one was actually showing.
+void _showThemeModeDialog(BuildContext context, ThemeNotifier notifier) {
+  showDialog(
+    context: context,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      return AlertDialog(
+        title: Text('Appearance', style: theme.serif(22)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ThemeModeOption(
+              icon: Icons.light_mode_outlined,
+              label: 'Light',
+              selected: notifier.themeMode == ThemeMode.light,
+              onTap: () {
+                notifier.setThemeMode(ThemeMode.light);
+                Navigator.pop(ctx);
+              },
+            ),
+            _ThemeModeOption(
+              icon: Icons.dark_mode_outlined,
+              label: 'Dark',
+              selected: notifier.themeMode == ThemeMode.dark,
+              onTap: () {
+                notifier.setThemeMode(ThemeMode.dark);
+                Navigator.pop(ctx);
+              },
+            ),
+            _ThemeModeOption(
+              icon: Icons.brightness_auto_outlined,
+              label: 'System',
+              selected: notifier.themeMode == ThemeMode.system,
+              onTap: () {
+                notifier.setThemeMode(ThemeMode.system);
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+        ],
+      );
+    },
+  );
+}
 
-  const _ProfileInfo({
-    required this.displayName,
-    required this.email,
-    required this.mobile,
-    required this.onLogout,
+class _ThemeModeOption extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _ThemeModeOption({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: mobile ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-      children: [
-        Text(
-          displayName,
-          style: theme.serif(mobile ? 28 : 40),
-          textAlign: mobile ? TextAlign.center : TextAlign.start,
-        ),
-        const SizedBox(height: 4),
-        Text(email, style: theme.sans(13.5, color: theme.ink2)),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 8,
-          alignment: mobile ? WrapAlignment.center : WrapAlignment.start,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        child: Row(
           children: [
-            _PillButton(label: 'Edit profile', primary: true),
-            _PillButton(label: 'Share Spendo', primary: false),
+            Icon(icon, size: 20, color: selected ? theme.accentColor : theme.ink2),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(label, style: theme.sans(14, weight: FontWeight.w500)),
+            ),
+            if (selected) Icon(Icons.check_rounded, size: 18, color: theme.accentColor),
           ],
         ),
-      ],
-    );
-  }
-}
-
-class _PillButton extends StatelessWidget {
-  final String label;
-  final bool primary;
-  const _PillButton({required this.label, required this.primary});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: primary ? theme.accentColor : Colors.transparent,
-        border: primary ? null : Border.all(color: theme.border),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: theme.sans(13, weight: FontWeight.w600,
-            color: primary ? theme.accentInkColor : theme.ink),
       ),
     );
   }
 }
+
+// ─── Sub-widgets ─────────────────────────────────────────────────────────────
 
 class _AchievementsGrid extends StatelessWidget {
-  final int txCount;
-  final double balance;
+  final DashboardNotifier dashNotifier;
+  final CategoryNotifier catNotifier;
   final bool mobile;
 
   const _AchievementsGrid({
-    required this.txCount,
-    required this.balance,
+    required this.dashNotifier,
+    required this.catNotifier,
     required this.mobile,
   });
 
@@ -426,19 +356,40 @@ class _AchievementsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
+    // Practical achievements tied to actually using the app's real features
+    // (goals, categories, products, budgeting discipline) rather than pure
+    // transaction-count vanity milestones.
+    final txCount = dashNotifier.cashflows.length;
+    final hasIncome = dashNotifier.cashflows.any((c) => c.isIncome);
+    final categories = catNotifier.categories;
+    final hasCategoryGoal = categories.any((c) => c.monthlyGoal != null);
+    final hasProducts = categories.any((c) => c.visibleProducts.isNotEmpty);
+    final monthlyGoal = dashNotifier.monthlyGoal;
+    final underBudget = monthlyGoal != null && dashNotifier.monthExpenses <= monthlyGoal;
+    final distinctDays = dashNotifier.cashflows
+        .map((c) => DateTime(c.date.year, c.date.month, c.date.day))
+        .toSet()
+        .length;
+
     final achievements = [
-      (emoji: '🧾', name: 'First transaction', desc: 'Logged your first entry',
+      (icon: Icons.receipt_long_rounded, name: 'First entry', desc: 'Logged your first transaction',
        earned: txCount >= 1, tintBg: theme.tintMintBg, tintInk: theme.tintMintInk),
-      (emoji: '🔥', name: 'Getting started', desc: 'Logged 10+ transactions',
-       earned: txCount >= 10, tintBg: theme.tintButterBg, tintInk: theme.tintButterInk),
-      (emoji: '📊', name: 'Data nerd', desc: 'Logged 50+ transactions',
-       earned: txCount >= 50, tintBg: theme.tintSkyBg, tintInk: theme.tintSkyInk),
-      (emoji: '💰', name: 'Saver', desc: 'Positive net worth',
-       earned: balance > 0, tintBg: theme.tintCoralBg, tintInk: theme.tintCoralInk),
-      (emoji: '🏆', name: 'Pro tracker', desc: '100+ transactions logged',
-       earned: txCount >= 100, tintBg: theme.tintLavenderBg, tintInk: theme.tintLavenderInk),
-      (emoji: '🚀', name: 'Power user', desc: '200+ transactions logged',
-       earned: txCount >= 200, tintBg: theme.tintRoseBg, tintInk: theme.tintRoseInk),
+      (icon: Icons.payments_rounded, name: 'First income', desc: 'Logged an income entry',
+       earned: hasIncome, tintBg: theme.tintSkyBg, tintInk: theme.tintSkyInk),
+      (icon: Icons.flag_rounded, name: 'Goal setter', desc: 'Set a monthly budget goal',
+       earned: monthlyGoal != null, tintBg: theme.tintLavenderBg, tintInk: theme.tintLavenderInk),
+      (icon: Icons.track_changes_rounded, name: 'Category goal', desc: 'Set a goal for a category',
+       earned: hasCategoryGoal, tintBg: theme.tintRoseBg, tintInk: theme.tintRoseInk),
+      (icon: Icons.inventory_2_rounded, name: 'Organized', desc: 'Added a product to a category',
+       earned: hasProducts, tintBg: theme.tintButterBg, tintInk: theme.tintButterInk),
+      (icon: Icons.grid_view_rounded, name: 'Multi-tracker', desc: 'Using 5+ categories',
+       earned: categories.length >= 5, tintBg: theme.tintCoralBg, tintInk: theme.tintCoralInk),
+      (icon: Icons.savings_rounded, name: 'Saver', desc: 'Positive net worth',
+       earned: dashNotifier.balance > 0, tintBg: theme.tintMintBg, tintInk: theme.tintMintInk),
+      (icon: Icons.verified_rounded, name: 'Budget keeper', desc: 'Under budget this month',
+       earned: underBudget, tintBg: theme.tintSkyBg, tintInk: theme.tintSkyInk),
+      (icon: Icons.local_fire_department_rounded, name: 'Consistent', desc: 'Logged on 5+ different days',
+       earned: distinctDays >= 5, tintBg: theme.tintLavenderBg, tintInk: theme.tintLavenderInk),
     ];
 
     return LayoutBuilder(
@@ -466,10 +417,7 @@ class _AchievementsGrid extends StatelessWidget {
                           color: a.earned ? a.tintInk : theme.ink3,
                           shape: BoxShape.circle,
                         ),
-                        child: Center(
-                          child: Text(a.emoji,
-                              style: const TextStyle(fontSize: 20)),
-                        ),
+                        child: Icon(a.icon, size: 20, color: Colors.white),
                       ),
                       const SizedBox(width: 10),
                       Expanded(

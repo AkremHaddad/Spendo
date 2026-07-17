@@ -3,7 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../cashflow/data/models/cashflow.dart';
 import '../data/models/balance.dart';
+import '../data/models/monthly_record.dart';
 import '../../../core/utils/money.dart';
+
+class _MonthAgg {
+  double income = 0;
+  double expenses = 0;
+  final Map<String, double> spendByCategory = {};
+}
 
 class DashboardNotifier extends ChangeNotifier {
   final String userId;
@@ -12,8 +19,17 @@ class DashboardNotifier extends ChangeNotifier {
   List<Cashflow> _cashflows = [];
   List<Cashflow> get cashflows => _cashflows;
 
+  // Keyed by (year, month) — rebuilt once per cashflows snapshot (see
+  // _rebuildMonthlyRecords), not on every read, so anything that just needs
+  // "totals for month X" is a cheap lookup instead of a fresh scan over
+  // every cashflow.
+  Map<(int, int), MonthlyRecord> _monthlyRecords = {};
+
   Balance? _balanceObj;
   double get balance => _balanceObj?.amount ?? 0.0;
+
+  /// Overall monthly budget goal (total spend target). Null = not set yet.
+  double? get monthlyGoal => _balanceObj?.monthlyGoal;
 
   bool _loading = true;
   bool get loading => _loading;
@@ -43,6 +59,7 @@ class DashboardNotifier extends ChangeNotifier {
       _cashflows = snapshot.docs
           .map((doc) => Cashflow.fromJson(doc.data()).copyWith(id: doc.id))
           .toList();
+      _rebuildMonthlyRecords();
       _loading = false;
       notifyListeners();
     }, onError: (err) {
@@ -96,6 +113,19 @@ class DashboardNotifier extends ChangeNotifier {
     }
   }
 
+  /// Sets or clears the overall monthly budget goal (pass null to clear it).
+  Future<void> updateMonthlyGoal(double? newGoal) async {
+    try {
+      final docRef = firestore.collection('balances').doc(userId);
+      await docRef.set(
+        {'userId': userId, 'monthlyGoalMillimes': newGoal == null ? null : dinarsToMillimes(newGoal)},
+        SetOptions(merge: true),
+      );
+    } catch (e, st) {
+      debugPrint('Error updating monthly goal: $e\n$st');
+    }
+  }
+
   /// Force reload everything — the listeners are live, so this just
   /// restarts them (useful e.g. after switching users).
   Future<void> reload() async {
@@ -145,10 +175,57 @@ List<Cashflow> get last6MonthsCashflows {
   return _cashflows.where((c) => !c.date.isBefore(sixMonthsAgo)).toList();
 }
 
+  /// Groups [_cashflows] into per-month totals (income, expenses, spend by
+  /// category). Called once whenever a new cashflows snapshot arrives —
+  /// everything that reads monthly aggregates (monthIncome/monthExpenses,
+  /// last6MonthlyRecords) then just looks the answer up instead of
+  /// re-scanning the full list.
+  void _rebuildMonthlyRecords() {
+    final agg = <(int, int), _MonthAgg>{};
+    for (final c in _cashflows) {
+      final key = (c.date.year, c.date.month);
+      final a = agg.putIfAbsent(key, () => _MonthAgg());
+      if (c.isIncome) {
+        a.income += c.amount;
+      } else if (c.isExpense) {
+        final amt = c.amount.abs();
+        a.expenses += amt;
+        a.spendByCategory[c.categoryId] = (a.spendByCategory[c.categoryId] ?? 0) + amt;
+      }
+    }
+    _monthlyRecords = {
+      for (final e in agg.entries)
+        e.key: MonthlyRecord(
+          year: e.key.$1,
+          month: e.key.$2,
+          income: e.value.income,
+          expenses: e.value.expenses,
+          spendByCategory: e.value.spendByCategory,
+        ),
+    };
+  }
 
-  double get monthIncome =>
-      currentMonthCashflows.where((c) => c.isIncome).fold(0.0, (s, c) => s + c.amount);
+  /// The last 6 calendar months (oldest → newest), always exactly 6 entries
+  /// — a month with no activity yet gets a zero record rather than being
+  /// skipped, so callers (e.g. the donut chart's month navigator) can index
+  /// into this safely.
+  List<MonthlyRecord> get last6MonthlyRecords {
+    final now = DateTime.now();
+    return List.generate(6, (i) {
+      final offset = 5 - i;
+      final d = DateTime(now.year, now.month - offset, 1);
+      return _monthlyRecords[(d.year, d.month)] ??
+          MonthlyRecord(year: d.year, month: d.month, income: 0, expenses: 0, spendByCategory: {});
+    });
+  }
 
-  double get monthExpenses =>
-      currentMonthCashflows.where((c) => c.isExpense).fold(0.0, (s, c) => s + c.amount.abs());
+  double get monthIncome {
+    final now = DateTime.now();
+    return _monthlyRecords[(now.year, now.month)]?.income ?? 0.0;
+  }
+
+  double get monthExpenses {
+    final now = DateTime.now();
+    return _monthlyRecords[(now.year, now.month)]?.expenses ?? 0.0;
+  }
 }

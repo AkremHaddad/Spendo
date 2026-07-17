@@ -7,30 +7,40 @@ class Balance {
   /// Source of truth, in millimes. See `core/utils/money.dart`.
   final int amountMillimes;
 
+  /// Overall monthly budget goal (total spend target across all
+  /// categories), in millimes. Null = no goal set yet.
+  final int? monthlyGoalMillimes;
+
   /// Dinar-denominated view, for existing call sites.
   double get amount => millimesToDinars(amountMillimes);
+
+  double? get monthlyGoal => monthlyGoalMillimes == null ? null : millimesToDinars(monthlyGoalMillimes!);
 
   Balance({
     required this.id,
     required this.userId,
     double amount = 0.0,
+    this.monthlyGoalMillimes,
   }) : amountMillimes = dinarsToMillimes(amount);
 
   Balance.fromMillimes({
     required this.id,
     required this.userId,
     this.amountMillimes = 0,
+    this.monthlyGoalMillimes,
   });
 
   Balance copyWith({
     String? id,
     String? userId,
     double? amount,
+    int? monthlyGoalMillimes,
   }) {
     return Balance.fromMillimes(
       id: id ?? this.id,
       userId: userId ?? this.userId,
       amountMillimes: amount != null ? dinarsToMillimes(amount) : amountMillimes,
+      monthlyGoalMillimes: monthlyGoalMillimes ?? this.monthlyGoalMillimes,
     );
   }
 
@@ -38,6 +48,7 @@ class Balance {
     return {
       'userId': userId,
       'amountMillimes': amountMillimes,
+      'monthlyGoalMillimes': monthlyGoalMillimes,
     };
   }
 
@@ -58,10 +69,19 @@ class Balance {
       parsedMillimes = dinarsToMillimes(legacyDouble);
     }
 
+    final dynamic goalRaw = json['monthlyGoalMillimes'];
+    int? parsedGoalMillimes;
+    if (goalRaw is int) {
+      parsedGoalMillimes = goalRaw;
+    } else if (goalRaw is double) {
+      parsedGoalMillimes = goalRaw.round();
+    }
+
     return Balance.fromMillimes(
       id: id,
       userId: json['userId']?.toString() ?? '',
       amountMillimes: parsedMillimes,
+      monthlyGoalMillimes: parsedGoalMillimes,
     );
   }
 

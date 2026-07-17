@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import '../../cashflow/data/models/cashflow.dart';
+import 'package:intl/intl.dart';
 import '../../categories/data/models/category.dart';
+import '../../categories/category_style_options.dart';
+import '../data/models/monthly_record.dart';
 import '../../../core/theme/theme.dart';
-import '../presentation/dashboard_page.dart' show catEmoji;
 
-/// Category spend breakdown as a donut, with a hover-driven center label
-/// and a side legend — content only, the caller provides the card chrome
-/// (same split as [MonthlyIncomeExpensesChart]).
+/// Category spend breakdown as a donut, with prev/next arrows to browse
+/// the last 6 months' [MonthlyRecord]s — content only, the caller provides
+/// the card chrome (same split as [MonthlyIncomeExpensesChart]).
 class CategoryDonutChart extends StatefulWidget {
-  final List<Cashflow> cashflows;
+  final List<MonthlyRecord> monthlyRecords;
   final List<Category> categories;
 
   /// Whether the donut and legend should stack vertically instead of
@@ -22,7 +23,7 @@ class CategoryDonutChart extends StatefulWidget {
 
   const CategoryDonutChart({
     super.key,
-    required this.cashflows,
+    required this.monthlyRecords,
     required this.categories,
     this.stacked = false,
   });
@@ -34,43 +35,90 @@ class CategoryDonutChart extends StatefulWidget {
 class _Slice {
   final String name;
   final Color color;
+  final IconData icon;
   final double value;
-  const _Slice({required this.name, required this.color, required this.value});
+  const _Slice({required this.name, required this.color, required this.icon, required this.value});
 }
 
 class _CategoryDonutChartState extends State<CategoryDonutChart> {
   int? _touchedIndex;
+  late int _monthIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _monthIndex = widget.monthlyRecords.length - 1; // default to the current month
+  }
+
+  @override
+  void didUpdateWidget(covariant CategoryDonutChart oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_monthIndex >= widget.monthlyRecords.length) {
+      _monthIndex = widget.monthlyRecords.length - 1;
+    }
+  }
+
+  void _goToPrevMonth() {
+    if (_monthIndex <= 0) return;
+    setState(() {
+      _monthIndex--;
+      _touchedIndex = null;
+    });
+  }
+
+  void _goToNextMonth() {
+    if (_monthIndex >= widget.monthlyRecords.length - 1) return;
+    setState(() {
+      _monthIndex++;
+      _touchedIndex = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
-    final spendByCat = <String, double>{};
-    for (final c in widget.cashflows.where((c) => c.isExpense)) {
-      spendByCat[c.categoryId] = (spendByCat[c.categoryId] ?? 0) + c.amount.abs();
-    }
-
-    if (spendByCat.isEmpty) {
-      return SizedBox(
-        height: 180,
-        child: Center(
-          child: Text('No spending yet this month', style: theme.sans(13.5, color: theme.ink2)),
-        ),
-      );
-    }
+    final record = widget.monthlyRecords[_monthIndex];
+    final spendByCat = record.spendByCategory;
 
     final catById = {for (final c in widget.categories) c.id: c};
     final entries = spendByCat.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
     final slices = entries.map((e) {
       final cat = catById[e.key];
-      return _Slice(name: cat?.name ?? 'Unknown', color: cat?.color ?? theme.ink3, value: e.value);
+      return _Slice(
+        name: cat?.name ?? 'Unknown',
+        color: cat != null ? colorForCategoryKey(cat.colorKey, theme.brightness) : theme.ink3,
+        icon: cat != null ? iconForCategoryKey(cat.icon) : Icons.category_rounded,
+        value: e.value,
+      );
     }).toList();
     final total = slices.fold(0.0, (s, sl) => s + sl.value);
     final active = (_touchedIndex != null && _touchedIndex! >= 0 && _touchedIndex! < slices.length)
         ? slices[_touchedIndex!]
         : null;
 
-    return _buildContent(context, theme, slices, total, active, widget.stacked);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _MonthNavRow(
+          theme: theme,
+          label: DateFormat.yMMMM().format(record.monthStart),
+          canGoPrev: _monthIndex > 0,
+          canGoNext: _monthIndex < widget.monthlyRecords.length - 1,
+          onPrev: _goToPrevMonth,
+          onNext: _goToNextMonth,
+        ),
+        const SizedBox(height: 14),
+        if (slices.isEmpty)
+          SizedBox(
+            height: 180,
+            child: Center(
+              child: Text('No spending that month', style: theme.sans(13.5, color: theme.ink2)),
+            ),
+          )
+        else
+          _buildContent(context, theme, slices, total, active, widget.stacked),
+      ],
+    );
   }
 
   Widget _buildContent(
@@ -121,7 +169,7 @@ class _CategoryDonutChartState extends State<CategoryDonutChart> {
                 ? Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(catEmoji(active.name), style: const TextStyle(fontSize: 24)),
+                      Icon(active.icon, size: 24, color: active.color),
                       const SizedBox(height: 2),
                       Text('\$${active.value.toStringAsFixed(0)}', style: theme.serif(22)),
                       Text(
@@ -186,6 +234,66 @@ class _CategoryDonutChartState extends State<CategoryDonutChart> {
         const SizedBox(width: 24),
         Expanded(child: legend),
       ],
+    );
+  }
+}
+
+class _MonthNavRow extends StatelessWidget {
+  final ThemeData theme;
+  final String label;
+  final bool canGoPrev;
+  final bool canGoNext;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+
+  const _MonthNavRow({
+    required this.theme,
+    required this.label,
+    required this.canGoPrev,
+    required this.canGoNext,
+    required this.onPrev,
+    required this.onNext,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        _NavArrow(theme: theme, icon: Icons.chevron_left_rounded, enabled: canGoPrev, onTap: onPrev),
+        Text(label, style: theme.sans(13, weight: FontWeight.w600)),
+        _NavArrow(theme: theme, icon: Icons.chevron_right_rounded, enabled: canGoNext, onTap: onNext),
+      ],
+    );
+  }
+}
+
+class _NavArrow extends StatelessWidget {
+  final ThemeData theme;
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+
+  const _NavArrow({
+    required this.theme,
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: theme.surface2,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, size: 18, color: enabled ? theme.ink : theme.ink3),
+      ),
     );
   }
 }

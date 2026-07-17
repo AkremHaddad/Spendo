@@ -2,46 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../logic/categoryNotifier.dart';
 import '../data/models/category.dart';
+import '../category_style_options.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/utils/responsive.dart';
 
-const List<Color> kCategoryColors = [
-  Color.fromARGB(255, 212, 33, 30), // Red
-  Color(0xFFEF5350), // Light Red
-  Color(0xFFD81B60), // Pink
-
-  Color(0xFFFF6F00), // Orange
-  Color(0xFFFB8C00), // Deep Orange
-
-  Color(0xFFFDD835), // Yellow
-  Color(0xFFC0CA33), // Lime
-  Color(0xFF9E9D24), // Olive
-
-  Color(0xFF7CB342), // Light Green
-  Color(0xFF43A047), // Green
-  Color(0xFF00897B), // Teal
-
-  Color(0xFF00ACC1), // Cyan
-  Color(0xFF42A5F5), // Light Blue
-  Color(0xFF1E88E5), // Blue
-  Color(0xFF3949AB), // Indigo
-
-  Color(0xFF5E35B1), // Deep Purple
-  Color(0xFF8E24AA), // Purple
-
-  Color(0xFF6D4C41), // Brown
-  Color(0xFF546E7A), // Blue Grey
-  Color(0xFF000000), // Black
-];
-
 class CategoryDetailDialog {
   /// Show category detail dialog
-  static void showCategoryDetailDialog(
-    BuildContext context,
-    Category category,
-  ) {
+  static void showCategoryDetailDialog(BuildContext context, Category category) {
     final productInputController = TextEditingController();
-    final isMobileView = isMobile(context);
 
     showDialog(
       context: context,
@@ -61,38 +29,31 @@ class CategoryDetailDialog {
             }
 
             final theme = Theme.of(ctx2);
+            final tintInk = colorForCategoryKey(latestCategory.colorKey, theme.brightness);
+            final tintBg = tintInk.withOpacity(0.12);
 
-            void _addProduct() {
-              final productName = productInputController.text.trim();
-              if (productName.isEmpty) return;
-              notifier.addProduct(latestCategory.id, productName);
+            void addProduct() {
+              final name = productInputController.text.trim();
+              if (name.isEmpty) return;
+              notifier.addProduct(latestCategory.id, name);
               productInputController.clear();
             }
 
-            void _editProduct(String productId, String currentName) async {
+            Future<void> editProductDialog(String productId, String currentName) async {
               final controller = TextEditingController(text: currentName);
               final newName = await showDialog<String>(
                 context: ctx2,
                 builder: (_) => AlertDialog(
-                  title: const Text('Edit Product Name'),
-                  content: TextField(controller: controller),
+                  title: Text('Edit product', style: theme.serif(20)),
+                  content: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    onSubmitted: (v) => Navigator.pop(ctx2, v.trim()),
+                  ),
                   actions: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).baseContent,
-                      ),
-                      onPressed: () => Navigator.pop(ctx2, null),
-                      child: const Text('Cancel'),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        foregroundColor: Theme.of(context).primaryContent,
-                      ),
-                      onPressed: () =>
-                          Navigator.pop(ctx2, controller.text.trim()),
-                      child: const Text('Save'),
-                    ),
+                    TextButton(onPressed: () => Navigator.pop(ctx2, null), child: const Text('Cancel')),
+                    ElevatedButton(onPressed: () => Navigator.pop(ctx2, controller.text.trim()), child: const Text('Save')),
                   ],
                 ),
               );
@@ -101,400 +62,196 @@ class CategoryDetailDialog {
               }
             }
 
-            Future<void> _confirmDeleteProduct(String productId) async {
-              final confirmed = await showDialog<bool>(
+            Future<bool> confirmDialog({
+              required String title,
+              required String body,
+              required String confirmLabel,
+            }) async {
+              final result = await showDialog<bool>(
                 context: ctx2,
                 builder: (confirmCtx) => AlertDialog(
-                  title: const Text("Delete Product"),
-                  content: const Text(
-                    "Are you sure you want to delete this product?",
-                  ),
+                  title: Text(title, style: theme.serif(20)),
+                  content: Text(body, style: theme.sans(14, color: theme.ink2)),
                   actions: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).baseContent,
-                      ),
-                      onPressed: () => Navigator.pop(confirmCtx, false),
-                      child: const Text("Cancel"),
-                    ),
+                    TextButton(onPressed: () => Navigator.pop(confirmCtx, false), child: const Text('Cancel')),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.error,
-                        foregroundColor: theme.colorScheme.onError,
+                        backgroundColor: theme.tintCoralInk,
+                        foregroundColor: Colors.white,
                       ),
                       onPressed: () => Navigator.pop(confirmCtx, true),
-                      child: const Text("Delete"),
+                      child: Text(confirmLabel),
                     ),
                   ],
                 ),
               );
-              if (confirmed == true) {
+              return result ?? false;
+            }
+
+            Future<void> confirmDeleteProduct(String productId) async {
+              if (await confirmDialog(
+                title: 'Delete product',
+                body: 'Are you sure you want to delete this product?',
+                confirmLabel: 'Delete',
+              )) {
                 notifier.softDeleteProduct(latestCategory.id, productId);
               }
             }
 
-            Future<void> _confirmDeleteCategory() async {
-              final confirmed = await showDialog<bool>(
-                context: ctx2,
-                builder: (confirmCtx) => AlertDialog(
-                  title: const Text("Delete Category"),
-                  content: const Text(
-                    "Are you sure you want to delete this category?",
-                  ),
-                  actions: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: theme.colorScheme.onSurface,
-                      ),
-                      onPressed: () => Navigator.pop(confirmCtx, false),
-                      child: const Text("Cancel"),
-                    ),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.error,
-                        foregroundColor: theme.colorScheme.onError,
-                      ),
-                      onPressed: () => Navigator.pop(confirmCtx, true),
-                      child: const Text("Delete"),
-                    ),
-                  ],
-                ),
-              );
-
-              if (confirmed == true) {
-                final success = await notifier.softDeleteCategory(
-                  latestCategory.id,
-                );
+            Future<void> confirmDeleteCategory() async {
+              if (await confirmDialog(
+                title: 'Delete category',
+                body: "Are you sure you want to delete this category? This can't be undone.",
+                confirmLabel: 'Delete',
+              )) {
+                final success = await notifier.softDeleteCategory(latestCategory.id);
                 if (success) {
                   final nav = Navigator.of(ctx2);
                   if (nav.mounted && nav.canPop()) nav.pop();
-                } else {
-                  // show a non-crashing error indicator
-                  if (ScaffoldMessenger.maybeOf(ctx2) != null) {
-                    ScaffoldMessenger.of(ctx2).showSnackBar(
-                      const SnackBar(
-                        content: Text('Failed to delete category'),
-                      ),
-                    );
-                  }
+                } else if (ScaffoldMessenger.maybeOf(ctx2) != null) {
+                  ScaffoldMessenger.of(ctx2).showSnackBar(
+                    const SnackBar(content: Text('Failed to delete category')),
+                  );
                 }
               }
             }
 
+            void openEditCategoryDialog() {
+              _showCategoryFormDialog(
+                ctx2,
+                title: 'Edit category',
+                initialName: latestCategory.name,
+                initialColorKey: latestCategory.colorKey,
+                initialIcon: latestCategory.icon,
+                initialType: latestCategory.type,
+                initialGoal: latestCategory.monthlyGoal,
+                isEditing: true,
+                onSubmit: (name, colorKey, icon, type, goal) {
+                  notifier.editCategory(
+                    latestCategory.id,
+                    name: name,
+                    colorKey: colorKey,
+                    icon: icon,
+                    monthlyGoal: goal,
+                    clearMonthlyGoal: goal == null,
+                  );
+                },
+              );
+            }
+
+            final products = latestCategory.visibleProducts;
+
             return Dialog(
               child: ConstrainedBox(
                 constraints: BoxConstraints(
-                  maxWidth: MediaQuery.of(context).size.width < 600
-                      ? MediaQuery.of(context).size.width * 0.9
-                      : 500,
-                  maxHeight: !isMobileView ? MediaQuery.of(context).size.height * 0.85 : MediaQuery.of(context).size.height * 0.5,
+                  maxWidth: isMobile(context) ? MediaQuery.of(context).size.width * 0.92 : 480,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
                 ),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Header
-                    Container(
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                        color: latestCategory.color,
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(12),
-                        ),
-                      ),
-                      padding: const EdgeInsets.all(16),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
                       child: Row(
                         children: [
+                          Container(
+                            width: 48,
+                            height: 48,
+                            decoration: BoxDecoration(color: tintBg, borderRadius: BorderRadius.circular(14)),
+                            child: Icon(iconForCategoryKey(latestCategory.icon), color: tintInk, size: 24),
+                          ),
+                          const SizedBox(width: 14),
                           Expanded(
-                            child: Stack(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Stroke / Border
-                                Text(
-                                  latestCategory.name,
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    foreground: Paint()
-                                      ..style = PaintingStyle.stroke
-                                      ..strokeWidth = 2
-                                      ..color = Colors.black, // border color
+                                Text(latestCategory.name,
+                                    style: theme.serif(20), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (latestCategory.monthlyGoal != null)
+                                  Text(
+                                    'Goal: \$${latestCategory.monthlyGoal!.toStringAsFixed(0)}/mo',
+                                    style: theme.sans(12.5, color: theme.ink2),
                                   ),
-                                ),
-                                // Fill
-                                Text(
-                                  latestCategory.name,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white, // text fill color
-                                  ),
-                                ),
                               ],
                             ),
                           ),
-
-                          // Edit button
-                          Container(
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).white, // different bg for button
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.edit,
-                                color: Theme.of(ctx2).baseContent,
-                              ),
-                              onPressed: () async {
-                                final nameController = TextEditingController(
-                                  text: latestCategory.name,
-                                );
-                                Color selectedColor = latestCategory
-                                    .color; // pre-fill with current color
-
-                                final result = await showDialog<Map<String, dynamic>>(
-                                  context: ctx2,
-                                  builder: (_) => StatefulBuilder(
-                                    builder: (ctx2, setState) {
-                                      final theme = Theme.of(ctx2);
-
-                                      return AlertDialog(
-                                        title: const Text('Edit Category'),
-                                        content: SizedBox(
-                                          width: 400,
-                                          child: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              // Name input
-                                              TextField(
-                                                controller: nameController,
-                                                decoration: InputDecoration(
-                                                  labelText: "Name",
-                                                  filled: true,
-                                                  fillColor: theme
-                                                      .colorScheme
-                                                      .surfaceVariant,
-                                                ),
-                                                style: TextStyle(
-                                                  color: theme
-                                                      .colorScheme
-                                                      .onSurface,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 12),
-
-                                              // Color picker
-                                              const Align(
-                                                alignment: Alignment.centerLeft,
-                                                child: Text("Color"),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              SizedBox(
-                                                height: isMobileView ? 230 : 100,
-                                                child: GridView.count(
-                                                  crossAxisCount: isMobileView ? 5 : 10,
-                                                  crossAxisSpacing: 8,
-                                                  mainAxisSpacing: 8,
-                                                  children: kCategoryColors.map((
-                                                    c,
-                                                  ) {
-                                                    final isSelected =
-                                                        c == selectedColor;
-                                                    return GestureDetector(
-                                                      onTap: () => setState(
-                                                        () => selectedColor = c,
-                                                      ),
-                                                      child: Container(
-                                                        decoration: BoxDecoration(
-                                                          color: c,
-                                                          borderRadius:
-                                                              BorderRadius.circular(
-                                                                6,
-                                                              ),
-                                                          border: isSelected
-                                                              ? Border.all(
-                                                                  color: theme
-                                                                      .colorScheme
-                                                                      .onSurface,
-                                                                  width: 3,
-                                                                )
-                                                              : null,
-                                                        ),
-                                                      ),
-                                                    );
-                                                  }).toList(),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            style: TextButton.styleFrom(
-                                              foregroundColor:
-                                                  theme.colorScheme.onSurface,
-                                            ),
-                                            onPressed: () =>
-                                                Navigator.pop(ctx2, null),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          ElevatedButton(
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  theme.colorScheme.primary,
-                                              foregroundColor:
-                                                  theme.colorScheme.onPrimary,
-                                            ),
-                                            onPressed: () =>
-                                                Navigator.pop(ctx2, {
-                                                  "name": nameController.text
-                                                      .trim(),
-                                                  "color": selectedColor,
-                                                }),
-                                            child: const Text('Save'),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  ),
-                                );
-
-                                // Apply changes
-                                if (result != null &&
-                                    (result["name"] as String).isNotEmpty) {
-                                  notifier.editCategory(
-                                    latestCategory.id,
-                                    name: result["name"],
-                                    color: result["color"],
-                                  );
-                                }
-                              },
-                            ),
+                          IconButton(
+                            icon: Icon(Icons.edit_outlined, color: theme.ink2, size: 20),
+                            onPressed: openEditCategoryDialog,
                           ),
-                          // Delete button
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).white,
-                              borderRadius: BorderRadius.circular(50),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.delete,
-                                color: Theme.of(context).baseContent,
-                              ),
-                              onPressed: _confirmDeleteCategory,
-                            ),
+                          IconButton(
+                            icon: Icon(Icons.delete_outline_rounded, color: theme.tintCoralInk, size: 20),
+                            onPressed: confirmDeleteCategory,
                           ),
                         ],
                       ),
                     ),
+                    Divider(height: 1, color: theme.border),
 
                     // Products list
                     Expanded(
-                      child: Container(
-                        width: double.infinity,
-                        color: Theme.of(context).base300,
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            children: latestCategory.products
-                                .where((p) => !p.isDeleted)
-                                .map((p) {
-                                  return Container(
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    padding: const EdgeInsets.all(12),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Products', style: theme.sans(12.5, weight: FontWeight.w700, color: theme.ink2)),
+                            const SizedBox(height: 10),
+                            if (products.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                child: Text('No products yet', style: theme.sans(13.5, color: theme.ink2)),
+                              )
+                            else
+                              ...products.map((p) => Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).cardsColor,
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: Theme.of(context).borderColor),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: theme.shadowColor.withOpacity(
-                                            0.1,
-                                          ),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
+                                      color: theme.surface2,
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Row(
                                       children: [
                                         Expanded(
-                                          child: Text(
-                                            p.name,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              color:
-                                                  theme.colorScheme.onSurface,
-                                            ),
-                                          ),
+                                          child: Text(p.name,
+                                              style: theme.sans(13.5, weight: FontWeight.w600),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis),
                                         ),
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.edit,
-                                            color: Theme.of(
-                                              context,
-                                            ).primaryColor,
-                                          ),
-                                          onPressed: () =>
-                                              _editProduct(p.id, p.name),
+                                        GestureDetector(
+                                          onTap: () => editProductDialog(p.id, p.name),
+                                          child: Icon(Icons.edit_outlined, size: 17, color: theme.ink2),
                                         ),
-                                        IconButton(
-                                          icon: Icon(
-                                            Icons.delete,
-                                            color: Theme.of(context).error,
-                                          ),
-                                          onPressed: () =>
-                                              _confirmDeleteProduct(p.id),
+                                        const SizedBox(width: 14),
+                                        GestureDetector(
+                                          onTap: () => confirmDeleteProduct(p.id),
+                                          child: Icon(Icons.delete_outline_rounded, size: 17, color: theme.tintCoralInk),
                                         ),
                                       ],
                                     ),
-                                  );
-                                })
-                                .toList(),
-                          ),
+                                  )),
+                          ],
                         ),
                       ),
                     ),
 
                     // Add product row
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border(
-                          top: BorderSide(color: theme.dividerColor),
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: productInputController,
-                                decoration: InputDecoration(
-                                  labelText: 'New Product',
-                                  filled: true,
-                                  fillColor: theme.colorScheme.surface,
-                                ),
-                                style: TextStyle(
-                                  color: theme.colorScheme.onSurface,
-                                ),
-                                onSubmitted: (_) => _addProduct(),
-                              ),
+                    Divider(height: 1, color: theme.border),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: productInputController,
+                              decoration: const InputDecoration(labelText: 'New product'),
+                              onSubmitted: (_) => addProduct(),
                             ),
-                            const SizedBox(width: 12),
-                            ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).primaryColor,
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).primaryContent,
-                              ),
-                              onPressed: _addProduct,
-                              child: const Text('Add'),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 10),
+                          ElevatedButton(onPressed: addProduct, child: const Text('Add')),
+                        ],
                       ),
                     ),
                   ],
@@ -507,108 +264,171 @@ class CategoryDetailDialog {
     );
   }
 
-  /// Show dialog to add a new category
-  static void showAddCategoryDialog(BuildContext context) {
-    final nameController = TextEditingController();
-    Color selectedColor = kCategoryColors.first;
-    CategoryType selectedType = CategoryType.expense;
-    final isMobileView = isMobile(context);
+  /// Show dialog to add a new category. [initialType] should reflect
+  /// whichever Expense/Income tab the user was on when they tapped "New
+  /// category"/"New income" — it was previously hardcoded to expense, so
+  /// tapping "New income" silently opened the form defaulted to Expense.
+  static void showAddCategoryDialog(BuildContext context, {CategoryType initialType = CategoryType.expense}) {
+    _showCategoryFormDialog(
+      context,
+      title: initialType == CategoryType.expense ? 'New category' : 'New income',
+      initialName: '',
+      initialColorKey: kDefaultCategoryColorKey,
+      initialIcon: kDefaultCategoryIconKey,
+      initialType: initialType,
+      initialGoal: null,
+      isEditing: false,
+      onSubmit: (name, colorKey, icon, type, goal) {
+        context.read<CategoryNotifier>().addCategory(name, colorKey, type, icon: icon, monthlyGoal: goal);
+      },
+    );
+  }
+}
 
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx2, setState) {
-          final theme = Theme.of(ctx2);
+/// Shared add/edit form — name, icon, color, type (locked when editing), and
+/// an optional monthly goal. Used by both [CategoryDetailDialog.showAddCategoryDialog]
+/// and the edit action inside [CategoryDetailDialog.showCategoryDetailDialog].
+void _showCategoryFormDialog(
+  BuildContext context, {
+  required String title,
+  required String initialName,
+  required String initialColorKey,
+  required String initialIcon,
+  required CategoryType initialType,
+  required double? initialGoal,
+  required bool isEditing,
+  required void Function(String name, String colorKey, String icon, CategoryType type, double? goal) onSubmit,
+}) {
+  final nameController = TextEditingController(text: initialName);
+  final goalController = TextEditingController(
+    text: initialGoal == null ? '' : _formatGoalForInput(initialGoal),
+  );
+  String selectedColorKey = initialColorKey;
+  String selectedIcon = initialIcon;
+  CategoryType selectedType = initialType;
+  // While adding, typing a name auto-picks a matching icon until the user
+  // manually taps one; while editing an existing category we respect
+  // whatever icon is already set unless they explicitly change it.
+  bool iconManuallyChosen = isEditing;
 
-          return AlertDialog(
-            title: const Text("Add Category"),
-            content: SizedBox(
-              width: 400,
+  showDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx2, setState) {
+        final theme = Theme.of(ctx2);
+        final mobile = isMobile(ctx2);
+
+        return AlertDialog(
+          title: Text(title, style: theme.serif(22)),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: "Name",
-                      filled: true,
-                      fillColor: Theme.of(context).base200,
-                    ),
-                    style: TextStyle(color: Theme.of(context).baseContent),
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Name'),
+                    onChanged: (value) {
+                      if (!iconManuallyChosen) {
+                        setState(() => selectedIcon = suggestCategoryIconKey(value));
+                      }
+                    },
                   ),
-                  const SizedBox(height: 12),
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text("Color"),
-                  ),
+                  const SizedBox(height: 18),
+                  Text('Icon', style: theme.sans(12.5, weight: FontWeight.w700, color: theme.ink2)),
                   const SizedBox(height: 8),
                   SizedBox(
-                    height: isMobileView ? 230 : 100,
-                                                child: GridView.count(
-                                                  crossAxisCount: isMobileView ? 5 : 10,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                      children: kCategoryColors.map((c) {
-                        final isSelected = c == selectedColor;
-                        return GestureDetector(
-                          onTap: () => setState(() => selectedColor = c),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: c,
-                              borderRadius: BorderRadius.circular(6),
-                              border: isSelected
-                                  ? Border.all(
-                                      color: theme.colorScheme.onSurface,
-                                      width: 3,
-                                    )
-                                  : null,
+                    height: mobile ? 168 : 128,
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: kCategoryIcons.entries.map((entry) {
+                          final isSelected = entry.key == selectedIcon;
+                          final selectedColor = colorForCategoryKey(selectedColorKey, theme.brightness);
+                          return GestureDetector(
+                            onTap: () => setState(() {
+                              selectedIcon = entry.key;
+                              iconManuallyChosen = true;
+                            }),
+                            child: Container(
+                              width: 40,
+                              height: 40,
+                              decoration: BoxDecoration(
+                                color: isSelected ? selectedColor.withOpacity(0.15) : theme.surface2,
+                                borderRadius: BorderRadius.circular(10),
+                                border: isSelected ? Border.all(color: selectedColor, width: 2) : null,
+                              ),
+                              child: Icon(entry.value, size: 20, color: isSelected ? selectedColor : theme.ink2),
                             ),
-                          ),
-                        );
-                      }).toList(),
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _TypeToggle(
-                    selected: selectedType,
-                    onChanged: (t) => setState(() => selectedType = t),
+                  const SizedBox(height: 18),
+                  Text('Color', style: theme.sans(12.5, weight: FontWeight.w700, color: theme.ink2)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: kCategoryColorOptions.map((option) {
+                      final isSelected = option.key == selectedColorKey;
+                      final swatch = colorForCategoryKey(option.key, theme.brightness);
+                      return GestureDetector(
+                        onTap: () => setState(() => selectedColorKey = option.key),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: swatch,
+                            shape: BoxShape.circle,
+                            border: isSelected ? Border.all(color: theme.ink, width: 3) : null,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  if (!isEditing) ...[
+                    _TypeToggle(selected: selectedType, onChanged: (t) => setState(() => selectedType = t)),
+                    const SizedBox(height: 18),
+                  ],
+                  TextField(
+                    controller: goalController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly goal (optional)',
+                      hintText: 'e.g. 150',
+                    ),
                   ),
                 ],
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx2),
-                child: const Text("Cancel"),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).baseContent,
-                ),
-              ),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Theme.of(context).primaryContent,
-                ),
-                onPressed: () {
-                  final name = nameController.text.trim();
-                  if (name.isNotEmpty) {
-                    context.read<CategoryNotifier>().addCategory(
-                      name,
-                      selectedColor,
-                      selectedType,
-                    );
-                    Navigator.pop(ctx2);
-                  }
-                },
-                child: const Text("Add"),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx2), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                if (name.isEmpty) return;
+                final goal = double.tryParse(goalController.text.trim());
+                onSubmit(name, selectedColorKey, selectedIcon, selectedType, goal);
+                Navigator.pop(ctx2);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    ),
+  );
 }
+
+String _formatGoalForInput(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
 /// Expense/Income segmented toggle — replaces a plain DropdownButton with
 /// something that matches the rest of the app's pill-styled controls

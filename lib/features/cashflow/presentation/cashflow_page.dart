@@ -9,7 +9,7 @@ import '../widgets/add_transaction_form.dart';
 import '../widgets/transaction_edit_dialog.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/utils/responsive.dart';
-import '../../dashboard/presentation/dashboard_page.dart' show catEmoji;
+import '../../categories/category_style_options.dart';
 
 // ─── Card helper (same pattern as Dashboard) ─────────────────────────────────
 Widget _card({
@@ -395,7 +395,7 @@ class _TransactionList extends StatelessWidget {
         child: Center(
           child: Column(
             children: [
-              Text('🧾', style: const TextStyle(fontSize: 40)),
+              Icon(Icons.receipt_long_rounded, size: 40, color: theme.ink3),
               const SizedBox(height: 12),
               Text('No transactions yet',
                   style: theme.serif(20, color: theme.ink2)),
@@ -420,7 +420,7 @@ class _TransactionList extends StatelessWidget {
           final isIncome = tx.isIncome;
           final tintInk = isIncome
               ? theme.tintMintInk
-              : (cat != null ? _nearestTintInk(theme, cat.color) : theme.ink2);
+              : (cat != null ? colorForCategoryKey(cat.colorKey, theme.brightness) : theme.ink2);
           final tintBg = tintInk.withOpacity(0.12);
 
           return GestureDetector(
@@ -439,9 +439,10 @@ class _TransactionList extends StatelessWidget {
                     width: 40, height: 40,
                     decoration: BoxDecoration(
                         color: tintBg, borderRadius: BorderRadius.circular(12)),
-                    child: Center(
-                      child: Text(catEmoji(catName),
-                          style: const TextStyle(fontSize: 20)),
+                    child: Icon(
+                      cat != null ? iconForCategoryKey(cat.icon) : Icons.category_rounded,
+                      size: 20,
+                      color: tintInk,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -527,7 +528,7 @@ class _SideRail extends StatelessWidget {
                   final name = cat?.name ?? 'Unknown';
                   final pct = maxSpend > 0 ? e.value / maxSpend : 0.0;
                   final tintInk = cat != null
-                      ? _nearestTintInk(theme, cat.color)
+                      ? colorForCategoryKey(cat.colorKey, theme.brightness)
                       : theme.ink2;
 
                   return Padding(
@@ -539,11 +540,23 @@ class _SideRail extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Expanded(
-                              child: Text(
-                                '${catEmoji(name)} $name',
-                                style: theme.sans(12.5),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    cat != null ? iconForCategoryKey(cat.icon) : Icons.category_rounded,
+                                    size: 14,
+                                    color: tintInk,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      name,
+                                      style: theme.sans(12.5),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                             Text(
@@ -577,24 +590,3 @@ class _SideRail extends StatelessWidget {
   }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-Color _nearestTintInk(ThemeData theme, Color cat) {
-  final opts = [
-    theme.tintMintInk, theme.tintCoralInk, theme.tintButterInk,
-    theme.tintLavenderInk, theme.tintSkyInk, theme.tintRoseInk,
-  ];
-  double best = double.infinity;
-  Color result = theme.tintMintInk;
-  for (final c in opts) {
-    final d = _dist(cat, c);
-    if (d < best) { best = d; result = c; }
-  }
-  return result;
-}
-
-double _dist(Color a, Color b) {
-  final dr = (a.red - b.red).toDouble();
-  final dg = (a.green - b.green).toDouble();
-  final db = (a.blue - b.blue).toDouble();
-  return dr * dr + dg * dg + db * db;
-}

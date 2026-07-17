@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../categories/logic/categoryNotifier.dart';
+import '../../categories/data/models/category.dart';
+import '../../categories/category_style_options.dart';
 import '../../cashflow/data/models/cashflow.dart';
 import '../logic/dashboardNotifier.dart';
 import '../../../core/theme/theme.dart';
@@ -13,6 +15,7 @@ import '../widgets/monthly_income_expenses_chart.dart';
 import '../widgets/category_donut_chart.dart';
 import '../widgets/weekday_rhythm_chart.dart';
 import '../widgets/forecast_area_chart.dart';
+import '../widgets/net_worth_trend_chart.dart';
 
 // ─── Shared card helper ──────────────────────────────────────────────────────
 Widget _card({
@@ -106,72 +109,6 @@ class _RingPainter extends CustomPainter {
       old.progress != progress || old.progressColor != progressColor;
 }
 
-// ─── Tiny sparkline ──────────────────────────────────────────────────────────
-class _Sparkline extends StatelessWidget {
-  final List<double> data;
-  final Color color;
-  final double width;
-  final double height;
-
-  const _Sparkline({
-    required this.data,
-    required this.color,
-    this.width = 80,
-    this.height = 28,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: width,
-      height: height,
-      child: CustomPaint(
-        painter: _SparklinePainter(data: data, color: color),
-      ),
-    );
-  }
-}
-
-class _SparklinePainter extends CustomPainter {
-  final List<double> data;
-  final Color color;
-
-  const _SparklinePainter({required this.data, required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (data.length < 2) return;
-    final max = data.reduce((a, b) => a > b ? a : b);
-    final min = data.reduce((a, b) => a < b ? a : b);
-    final range = (max - min).abs();
-    if (range == 0) return;
-
-    final pts = <Offset>[];
-    for (int i = 0; i < data.length; i++) {
-      final x = size.width * i / (data.length - 1);
-      final y = size.height - (size.height * (data[i] - min) / range);
-      pts.add(Offset(x, y));
-    }
-
-    final path = Path()..moveTo(pts[0].dx, pts[0].dy);
-    for (int i = 1; i < pts.length; i++) {
-      path.lineTo(pts[i].dx, pts[i].dy);
-    }
-
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _SparklinePainter old) => old.data != data;
-}
 
 // ─── Dashboard Page ──────────────────────────────────────────────────────────
 class DashboardPage extends StatefulWidget {
@@ -348,40 +285,21 @@ class _DashboardPageState extends State<DashboardPage> {
       return Center(child: CircularProgressIndicator(color: theme.accentColor));
     }
 
-    final allCashflows = notifier.last30DaysCashflows;
+    final last30DaysCashflows = notifier.last30DaysCashflows;
     final income = notifier.monthIncome;
     final expenses = notifier.monthExpenses;
     final balance = notifier.balance;
 
-    // Build spending by category for budget rings
-    final spendByCat = <String, double>{};
-    for (final cf in notifier.currentMonthCashflows) {
-      if (cf.isExpense) {
-        spendByCat[cf.categoryId] = (spendByCat[cf.categoryId] ?? 0) + cf.amount.abs();
-      }
-    }
+    // Current month's category totals — precomputed by DashboardNotifier
+    // (see MonthlyRecord) instead of re-summing currentMonthCashflows here.
+    final spendByCat = notifier.last6MonthlyRecords.last.spendByCategory;
     final maxCatSpend = spendByCat.values.fold(0.0, max);
 
     final coaches = _buildCoachTips(notifier, catNotifier, spendByCat, income, expenses);
     final coach = coaches[_coachIdx % coaches.length];
 
-    // Recent transactions (last 5)
-    final recent = notifier.last7DaysCashflows.take(5).toList();
-
-    // Daily spend sparkline for last 14 days
-    final last14 = <double>[];
-    final now = DateTime.now();
-    for (int i = 13; i >= 0; i--) {
-      final day = now.subtract(Duration(days: i));
-      final dayTotal = allCashflows
-          .where((c) =>
-              c.isExpense &&
-              c.date.year == day.year &&
-              c.date.month == day.month &&
-              c.date.day == day.day)
-          .fold(0.0, (s, c) => s + c.amount.abs());
-      last14.add(dayTotal);
-    }
+    // Recent transactions (last 6)
+    final recent = notifier.last7DaysCashflows.take(6).toList();
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -402,20 +320,15 @@ class _DashboardPageState extends State<DashboardPage> {
           padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 28),
           child: Column(
             children: [
-              // ── Hero row: balance + streak + AI coach ────────────────────
+              // ── Hero row: balance + income/expense + AI coach ────────────
               // Below `compact`, there isn't room for the balance card and
-              // streak column to sit side by side without cramming — stack
-              // them instead. True `mobile` keeps the minimal streak banner;
-              // the wider-but-still-stacked band (mobile..compact) gets the
-              // fuller streak column since a full-width column has plenty
-              // of room for it. The AI coach card lives at the bottom of
-              // this same column (under the streak/income-expense info)
-              // rather than as its own full-width row.
+              // the income/expense+coach column to sit side by side without
+              // cramming — stack them instead.
               mobile
                   ? Column(children: [
-                      _BalanceCard(context, balance, income, expenses, last14, () => _showEditBalanceDialog(context, notifier), mobile),
+                      _BalanceCard(context, balance, income, expenses, last30DaysCashflows, () => _showEditBalanceDialog(context, notifier), mobile),
                       const SizedBox(height: 12),
-                      _StreakRow(context, mobile),
+                      _IncomeExpenseRow(context, income, expenses, mobile),
                       SizedBox(height: mobile ? 12 : 18),
                       _CoachCard(context, coach, () {
                         setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
@@ -423,9 +336,9 @@ class _DashboardPageState extends State<DashboardPage> {
                     ])
                   : compact
                       ? Column(children: [
-                          _BalanceCard(context, balance, income, expenses, last14, () => _showEditBalanceDialog(context, notifier), mobile),
+                          _BalanceCard(context, balance, income, expenses, last30DaysCashflows, () => _showEditBalanceDialog(context, notifier), mobile),
                           const SizedBox(height: 18),
-                          _StreakColumn(context, income, expenses, mobile),
+                          _IncomeExpenseRow(context, income, expenses, mobile),
                           SizedBox(height: mobile ? 12 : 18),
                           _CoachCard(context, coach, () {
                             setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
@@ -448,15 +361,27 @@ class _DashboardPageState extends State<DashboardPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            flex: 14,
-                            child: _BalanceCard(context, balance, income, expenses, last14, () => _showEditBalanceDialog(context, notifier), mobile),
+                            flex: 10,
+                            // Fixed height matching the right column's own
+                            // fixed total (income/spend row 90 + spacing 18
+                            // + coach card 186 = 294) so the two columns
+                            // always line up evenly. A literal height
+                            // instead of IntrinsicHeight+stretch — see the
+                            // note above on why that triggered a
+                            // font-metrics overflow here. Keep this in sync
+                            // if _IncomeExpenseRow or _CoachCard's fixed
+                            // sizes ever change.
+                            child: SizedBox(
+                              height: 294,
+                              child: _BalanceCard(context, balance, income, expenses, last30DaysCashflows, () => _showEditBalanceDialog(context, notifier), mobile),
+                            ),
                           ),
                           const SizedBox(width: 18),
                           Expanded(
-                            flex: 10,
+                            flex: 14,
                             child: Column(
                               children: [
-                                _StreakColumn(context, income, expenses, mobile),
+                                _IncomeExpenseRow(context, income, expenses, mobile),
                                 SizedBox(height: mobile ? 12 : 18),
                                 _CoachCard(context, coach, () {
                                   setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
@@ -471,16 +396,23 @@ class _DashboardPageState extends State<DashboardPage> {
 
               // ── Recent activity + [This month, Spending this month] ─────
               // 1 card on the left, 2 stacked on the right — recent activity
-              // (5 items) is sized to roughly match the combined height of
+              // (6 items) is sized to roughly match the combined height of
               // the month summary + top-4 budget rings below it.
               compact
-                  ? Column(children: [
-                      _RecentCard(context, recent, catNotifier, mobile),
-                      SizedBox(height: mobile ? 12 : 18),
-                      _MonthSummaryCard(context, income, expenses, mobile),
-                      SizedBox(height: mobile ? 12 : 18),
-                      _BudgetRingsCard(context, catNotifier, spendByCat, maxCatSpend, income, mobile),
-                    ])
+                  ? Column(
+                      // stretch so _BudgetRingsCard (whose content doesn't
+                      // otherwise force full width, unlike the others'
+                      // Expanded rows / progress bar) matches its siblings'
+                      // width instead of shrink-wrapping narrower.
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _RecentCard(context, recent, catNotifier, mobile),
+                        SizedBox(height: mobile ? 12 : 18),
+                        _MonthSummaryCard(context, income, expenses, mobile),
+                        SizedBox(height: mobile ? 12 : 18),
+                        _BudgetRingsCard(context, catNotifier, spendByCat, maxCatSpend, income, mobile),
+                      ],
+                    )
                   : IntrinsicHeight(
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -493,6 +425,11 @@ class _DashboardPageState extends State<DashboardPage> {
                           Expanded(
                             flex: 10,
                             child: Column(
+                              // stretch so _BudgetRingsCard matches
+                              // _MonthSummaryCard's width instead of
+                              // shrink-wrapping to its own (narrower)
+                              // content — see the compact-branch comment.
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
                                 _MonthSummaryCard(context, income, expenses, mobile),
                                 SizedBox(height: mobile ? 12 : 18),
@@ -531,7 +468,7 @@ class _DashboardPageState extends State<DashboardPage> {
                   ? Column(children: [
                       _DonutCard(context, notifier, catNotifier, mobile),
                       SizedBox(height: mobile ? 12 : 18),
-                      _WeekdayRhythmCard(context, notifier, mobile),
+                      _WeekdayRhythmCard(context, notifier, mobile, fillHeight: false),
                     ])
                   : IntrinsicHeight(
                       child: Row(
@@ -539,7 +476,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         children: [
                           Expanded(child: _DonutCard(context, notifier, catNotifier, mobile)),
                           const SizedBox(width: 18),
-                          Expanded(child: _WeekdayRhythmCard(context, notifier, mobile)),
+                          Expanded(child: _WeekdayRhythmCard(context, notifier, mobile, fillHeight: true)),
                         ],
                       ),
                     ),
@@ -598,7 +535,7 @@ Widget _BalanceCard(
   double balance,
   double income,
   double expenses,
-  List<double> sparkData,
+  List<Cashflow> recentCashflows,
   VoidCallback onEdit,
   bool mobile,
 ) {
@@ -612,6 +549,10 @@ Widget _BalanceCard(
     padding: EdgeInsets.all(mobile ? 22 : 32),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
+      // spaceBetween only has an effect when this card is height-constrained
+      // (the desktop hero row pins it to 294 to match the right column) —
+      // in mobile/compact contexts it sizes to content as before.
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -687,159 +628,78 @@ Widget _BalanceCard(
           ],
         ),
         const SizedBox(height: 16),
-        if (sparkData.isNotEmpty)
-          _Sparkline(
-            data: sparkData,
-            color: theme.accentColor,
-            width: double.infinity,
-            height: mobile ? 60 : 80,
-          ),
+        NetWorthTrendChart(
+          cashflows: recentCashflows,
+          currentBalance: balance,
+          height: mobile ? 60 : 80,
+        ),
       ],
     ),
   );
 }
 
-Widget _StreakColumn(BuildContext context, double income, double expenses, bool mobile) {
+Widget _IncomeExpenseRow(BuildContext context, double income, double expenses, bool mobile) {
   final theme = Theme.of(context);
-  return Column(
-    children: [
-      // Streak card. Fixed-height Row for the same reason as the mini
-      // cards below — Row's intrinsic height for Expanded children is
-      // only approximate and can overflow by a few px under
-      // IntrinsicHeight.
-      _card(
-        context: context,
-        bg: theme.tintButterBg,
-        padding: const EdgeInsets.all(20),
-        child: SizedBox(
-          height: 52,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-            Container(
-              width: 52, height: 52,
-              decoration: BoxDecoration(
-                color: theme.tintButterInk,
-                shape: BoxShape.circle,
-              ),
-              child: const Center(child: Text('🔥', style: TextStyle(fontSize: 26))),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text('Keep logging!',
-                      style: theme.serif(22, color: theme.tintButterInk),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 4),
-                  Text('Every day counts',
-                      style: theme.sans(12, color: theme.tintButterInk.withOpacity(0.8)),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-            ],
-          ),
-        ),
-      ),
-      const SizedBox(height: 14),
-      // Income / Expense mini cards. Fixed height (rather than left to
-      // Row+Expanded's own content-driven sizing) because a Row's
-      // intrinsic-height computation for Expanded children is only an
-      // approximation — it can diverge by a few px from what real layout
-      // actually needs, and this Row can end up inside an IntrinsicHeight
-      // ancestor (see hero row) where that gap shows up as an overflow.
-      SizedBox(
-        height: 90,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: _card(
-                context: context,
-                bg: theme.tintMintBg,
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('INCOME · MTD',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.instrumentSans(
-                      fontSize: 10.5, fontWeight: FontWeight.w700,
-                      color: theme.tintMintInk, letterSpacing: 0.8,
-                    )),
-                    const SizedBox(height: 6),
-                    Text('\$${income.toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.serif(28, color: theme.tintMintInk)),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: _card(
-                context: context,
-                bg: theme.tintCoralBg,
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('SPENT · MTD',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.instrumentSans(
-                      fontSize: 10.5, fontWeight: FontWeight.w700,
-                      color: theme.tintCoralInk, letterSpacing: 0.8,
-                    )),
-                    const SizedBox(height: 6),
-                    Text('\$${expenses.toStringAsFixed(0)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.serif(28, color: theme.tintCoralInk)),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ],
-  );
-}
-
-Widget _StreakRow(BuildContext context, bool mobile) {
-  final theme = Theme.of(context);
-  return _card(
-    context: context,
-    bg: theme.tintButterBg,
-    padding: const EdgeInsets.all(18),
+  // Fixed height (rather than left to Row+Expanded's own content-driven
+  // sizing) because a Row's intrinsic-height computation for Expanded
+  // children is only an approximation — it can diverge by a few px from
+  // what real layout actually needs, and this Row can end up inside an
+  // IntrinsicHeight ancestor (see hero row) where that gap shows up as an
+  // overflow.
+  return SizedBox(
+    height: 90,
     child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          width: 48, height: 48,
-          decoration: BoxDecoration(color: theme.tintButterInk, shape: BoxShape.circle),
-          child: const Center(child: Text('🔥', style: TextStyle(fontSize: 24))),
+        Expanded(
+          child: _card(
+            context: context,
+            bg: theme.tintMintBg,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('INCOME · MTD',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.instrumentSans(
+                  fontSize: 10.5, fontWeight: FontWeight.w700,
+                  color: theme.tintMintInk, letterSpacing: 0.8,
+                )),
+                const SizedBox(height: 6),
+                Text('\$${income.toStringAsFixed(0)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.serif(28, color: theme.tintMintInk)),
+              ],
+            ),
+          ),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Keep logging!',
-                  style: theme.serif(20, color: theme.tintButterInk),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis),
-              Text('Every day counts', style: theme.sans(12, color: theme.tintButterInk.withOpacity(0.8))),
-            ],
+          child: _card(
+            context: context,
+            bg: theme.tintCoralBg,
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('SPENT · MTD',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.instrumentSans(
+                  fontSize: 10.5, fontWeight: FontWeight.w700,
+                  color: theme.tintCoralInk, letterSpacing: 0.8,
+                )),
+                const SizedBox(height: 6),
+                Text('\$${expenses.toStringAsFixed(0)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.serif(28, color: theme.tintCoralInk)),
+              ],
+            ),
           ),
         ),
       ],
@@ -961,63 +821,63 @@ Widget _BudgetRingsCard(
         Text('Top ${topCats.length} categories',
             style: theme.sans(13, color: theme.ink2)),
         const SizedBox(height: 18),
-        // Rings need real room to breathe. This card can end up in very
-        // different width contexts (full-width row, or one of two stacked
-        // cards in a narrower column) — a fixed item width lets Wrap
-        // reflow naturally to however many columns actually fit, without
-        // needing to measure the container (which would require
-        // LayoutBuilder, and this card can sit inside an IntrinsicHeight
-        // ancestor for row-height matching, which LayoutBuilder can't
-        // support — see CategoryDonutChart for the same constraint).
-        Wrap(
-          spacing: 12,
-          runSpacing: 18,
-          children: topCats.map((cat) {
-            final spent = spendByCat[cat.id] ?? 0;
-            final progress = income > 0 ? (spent / income).clamp(0.0, 1.0) : 0.0;
-            final tintInk = _colorFromCategory(theme, cat.color);
-            final tintBg = tintInk.withOpacity(0.12);
-
-            return SizedBox(
-              // Sized so all 4 fit on one line within this card's width —
-              // this card shares its column with "This month" above it, so
-              // it never gets more than roughly that card's width even on
-              // a wide screen (this is a 10/24-flex column, not the full
-              // page), so a fixed small size is safe rather than needing
-              // to measure the container.
-              width: mobile ? 78 : 104,
-              child: Column(
-                children: [
-                  _Ring(
-                    value: progress,
-                    trackColor: tintBg,
-                    progressColor: tintInk,
-                    size: mobile ? 36 : 48,
-                    strokeWidth: 5,
-                    child: Text(
-                      catEmoji(cat.name),
-                      style: TextStyle(fontSize: mobile ? 13 : 15),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    cat.name,
-                    style: theme.sans(12, weight: FontWeight.w600),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                  Text(
-                    '\$${spent.toStringAsFixed(0)}',
-                    style: theme.sans(11.5, color: theme.ink2),
-                  ),
-                ],
+        // Row of Expanded slots (not Wrap) so the top categories always sit
+        // on one line, evenly splitting whatever width this card actually
+        // has — including the narrow 10/24-flex column it shares with
+        // "This month" above it, now that both stretch to the same width.
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (int i = 0; i < topCats.length; i++) ...[
+              if (i > 0) const SizedBox(width: 12),
+              Expanded(
+                child: _buildRingItem(theme, topCats[i], spendByCat, income, mobile),
               ),
-            );
-          }).toList(),
+            ],
+          ],
         ),
       ],
     ),
+  );
+}
+
+Widget _buildRingItem(
+  ThemeData theme,
+  Category cat,
+  Map<String, double> spendByCat,
+  double income,
+  bool mobile,
+) {
+  final spent = spendByCat[cat.id] ?? 0;
+  final progress = income > 0 ? (spent / income).clamp(0.0, 1.0) : 0.0;
+  final tintInk = colorForCategoryKey(cat.colorKey, theme.brightness);
+  final tintBg = tintInk.withOpacity(0.12);
+
+  return Column(
+    children: [
+      _Ring(
+        value: progress,
+        trackColor: tintBg,
+        progressColor: tintInk,
+        size: mobile ? 36 : 48,
+        strokeWidth: 5,
+        child: Icon(iconForCategoryKey(cat.icon), size: mobile ? 15 : 17, color: tintInk),
+      ),
+      const SizedBox(height: 10),
+      Text(
+        cat.name,
+        style: theme.sans(12, weight: FontWeight.w600),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: TextAlign.center,
+      ),
+      Text(
+        '\$${spent.toStringAsFixed(0)}',
+        style: theme.sans(11.5, color: theme.ink2),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    ],
   );
 }
 
@@ -1050,7 +910,7 @@ Widget _RecentCard(
             final cat = catNotifier.getCategoryById(tx.categoryId);
             final catName = cat?.name ?? 'Unknown';
             final isIncome = tx.isIncome;
-            final tintInk = isIncome ? theme.tintMintInk : (cat != null ? _colorFromCategory(theme, cat.color) : theme.ink2);
+            final tintInk = isIncome ? theme.tintMintInk : (cat != null ? colorForCategoryKey(cat.colorKey, theme.brightness) : theme.ink2);
             final tintBg = tintInk.withOpacity(0.12);
             final daysAgo = DateTime.now().difference(tx.date).inDays;
             final timeLabel = daysAgo == 0 ? 'Today' : daysAgo == 1 ? 'Yesterday' : '${daysAgo}d ago';
@@ -1066,8 +926,10 @@ Widget _RecentCard(
                     Container(
                       width: 38, height: 38,
                       decoration: BoxDecoration(color: tintBg, borderRadius: BorderRadius.circular(12)),
-                      child: Center(
-                        child: Text(catEmoji(catName), style: const TextStyle(fontSize: 18)),
+                      child: Icon(
+                        cat != null ? iconForCategoryKey(cat.icon) : Icons.category_rounded,
+                        size: 18,
+                        color: tintInk,
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -1274,7 +1136,7 @@ Widget _IncomeVsSpendCard(BuildContext context, DashboardNotifier notifier, bool
             ]),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 28),
         SizedBox(
           height: 180,
           child: MonthlyIncomeExpensesChart(
@@ -1359,10 +1221,10 @@ Widget _DonutCard(
       children: [
         Text('Where it goes', style: theme.serif(mobile ? 20 : 22)),
         const SizedBox(height: 2),
-        Text('Spending by category · this month', style: theme.sans(13, color: theme.ink2)),
+        Text('Spending by category', style: theme.sans(13, color: theme.ink2)),
         const SizedBox(height: 16),
         CategoryDonutChart(
-          cashflows: notifier.currentMonthCashflows,
+          monthlyRecords: notifier.last6MonthlyRecords,
           categories: catNotifier.categories,
           stacked: mobile,
         ),
@@ -1371,8 +1233,9 @@ Widget _DonutCard(
   );
 }
 
-Widget _WeekdayRhythmCard(BuildContext context, DashboardNotifier notifier, bool mobile) {
+Widget _WeekdayRhythmCard(BuildContext context, DashboardNotifier notifier, bool mobile, {required bool fillHeight}) {
   final theme = Theme.of(context);
+  final chart = WeekdayRhythmChart(cashflows: notifier.cashflows);
   return _card(
     context: context,
     padding: EdgeInsets.all(mobile ? 18 : 24),
@@ -1382,8 +1245,20 @@ Widget _WeekdayRhythmCard(BuildContext context, DashboardNotifier notifier, bool
         Text('Your spending rhythm', style: theme.serif(mobile ? 20 : 22)),
         const SizedBox(height: 2),
         Text('Average by day of week · last 8 weeks', style: theme.sans(13, color: theme.ink2)),
-        const SizedBox(height: 16),
-        WeekdayRhythmChart(cashflows: notifier.cashflows),
+        if (fillHeight)
+          // This card is stretched (via the IntrinsicHeight row it shares
+          // with _DonutCard, desktop only) to match the donut card's taller
+          // natural height, but the chart itself is a fixed 150px —
+          // Expanded+Center soaks up the leftover space evenly above and
+          // below it instead of leaving it all as dead space underneath.
+          // Only safe here: in the compact/mobile stacked layout this card
+          // has no imposed height, so Expanded would have unbounded height
+          // to fill and Flutter would throw.
+          Expanded(child: Center(child: chart))
+        else ...[
+          const SizedBox(height: 28),
+          chart,
+        ],
       ],
     ),
   );
@@ -1401,32 +1276,6 @@ Widget _WeekdayRhythmCard(BuildContext context, DashboardNotifier notifier, bool
     case 'rose':     return (theme.tintRoseBg,     theme.tintRoseInk);
     default:         return (theme.tintMintBg,     theme.tintMintInk);
   }
-}
-
-Color _colorFromCategory(ThemeData theme, Color catColor) {
-  // Map the category's stored color to the nearest semantic tint ink
-  final palette = [
-    theme.tintMintInk, theme.tintCoralInk, theme.tintButterInk,
-    theme.tintLavenderInk, theme.tintSkyInk, theme.tintRoseInk,
-  ];
-  // Find closest by hue
-  double bestDist = double.infinity;
-  Color best = theme.tintMintInk;
-  for (final c in palette) {
-    final dist = _colorDist(catColor, c);
-    if (dist < bestDist) {
-      bestDist = dist;
-      best = c;
-    }
-  }
-  return best;
-}
-
-double _colorDist(Color a, Color b) {
-  final dr = (a.red - b.red).toDouble();
-  final dg = (a.green - b.green).toDouble();
-  final db = (a.blue - b.blue).toDouble();
-  return dr * dr + dg * dg + db * db;
 }
 
 String catEmoji(String name) {

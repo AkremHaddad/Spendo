@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../logic/categoryNotifier.dart';
 import '../../dashboard/logic/dashboardNotifier.dart';
 import '../../cashflow/data/models/cashflow.dart';
 import '../data/models/category.dart';
+import '../category_style_options.dart';
 import '../widgets/category_detail_dialog.dart';
 import '../../../core/theme/theme.dart';
 import '../../../core/utils/responsive.dart';
-import '../../dashboard/presentation/dashboard_page.dart' show catEmoji;
 
 // ─── Card helper ──────────────────────────────────────────────────────────────
 Widget _card({
@@ -127,11 +128,13 @@ class _CategoriesPageState extends State<CategoriesPage> {
       }
     }
     final totalExpenses = dashNotifier.monthExpenses;
-    final totalIncome = dashNotifier.monthIncome;
+    final monthlyGoal = dashNotifier.monthlyGoal;
 
-    // Overall % = expenses / income
-    final overall = totalIncome > 0 ? (totalExpenses / totalIncome).clamp(0.0, 1.2) : 0.0;
-    final remaining = totalIncome - totalExpenses;
+    // Overall % = expenses / chosen budget goal (was expenses/income)
+    final overall = (monthlyGoal != null && monthlyGoal > 0)
+        ? (totalExpenses / monthlyGoal).clamp(0.0, 1.2)
+        : 0.0;
+    final remaining = (monthlyGoal ?? 0) - totalExpenses;
 
     return Scaffold(
       backgroundColor: theme.bg,
@@ -153,50 +156,68 @@ class _CategoriesPageState extends State<CategoriesPage> {
             SizedBox(height: mobile ? 16 : 20),
 
             // ── Overall progress card ────────────────────────────────────
-            _card(
-              context: context,
-              padding: EdgeInsets.all(mobile ? 20 : 28),
-              child: mobile
-                  ? Column(
-                      children: [
-                        _OverallRing(
-                          context: context,
-                          overall: overall,
-                          totalSpent: totalExpenses,
-                          totalIncome: totalIncome,
-                          mobile: mobile,
-                        ),
-                        const SizedBox(height: 16),
-                        _OverallStats(
-                          context: context,
-                          expenses: expenses,
-                          spendByCat: spendByCat,
-                          remaining: remaining,
-                          mobile: mobile,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        _OverallRing(
-                          context: context,
-                          overall: overall,
-                          totalSpent: totalExpenses,
-                          totalIncome: totalIncome,
-                          mobile: mobile,
-                        ),
-                        const SizedBox(width: 28),
-                        Expanded(
-                          child: _OverallStats(
-                            context: context,
-                            expenses: expenses,
-                            spendByCat: spendByCat,
-                            remaining: remaining,
-                            mobile: mobile,
+            // Wrapped in a width:double.infinity SizedBox because _card()'s
+            // Container shrink-wraps to its child's natural width — on
+            // desktop the Row below has an Expanded child that forces full
+            // width on its own, but the mobile branch is a plain Column
+            // with no such child, so without this the whole card floats at
+            // less than full width instead of matching the cards below it.
+            SizedBox(
+              width: double.infinity,
+              child: _card(
+                context: context,
+                padding: EdgeInsets.all(mobile ? 20 : 28),
+                child: monthlyGoal == null
+                    ? _NoGoalPrompt(
+                        mobile: mobile,
+                        onSetGoal: () => _showEditGoalDialog(context, dashNotifier),
+                      )
+                    : mobile
+                        ? Column(
+                            children: [
+                              _OverallRing(
+                                context: context,
+                                overall: overall,
+                                totalSpent: totalExpenses,
+                                monthlyGoal: monthlyGoal,
+                                mobile: mobile,
+                              ),
+                              const SizedBox(height: 16),
+                              _OverallStats(
+                                context: context,
+                                expenses: expenses,
+                                spendByCat: spendByCat,
+                                remaining: remaining,
+                                monthlyGoal: monthlyGoal,
+                                mobile: mobile,
+                                onEditGoal: () => _showEditGoalDialog(context, dashNotifier),
+                              ),
+                            ],
+                          )
+                        : Row(
+                            children: [
+                              _OverallRing(
+                                context: context,
+                                overall: overall,
+                                totalSpent: totalExpenses,
+                                monthlyGoal: monthlyGoal,
+                                mobile: mobile,
+                              ),
+                              const SizedBox(width: 28),
+                              Expanded(
+                                child: _OverallStats(
+                                  context: context,
+                                  expenses: expenses,
+                                  spendByCat: spendByCat,
+                                  remaining: remaining,
+                                  monthlyGoal: monthlyGoal,
+                                  mobile: mobile,
+                                  onEditGoal: () => _showEditGoalDialog(context, dashNotifier),
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
-                    ),
+              ),
             ),
 
             SizedBox(height: mobile ? 14 : 18),
@@ -205,19 +226,24 @@ class _CategoriesPageState extends State<CategoriesPage> {
             Row(
               children: [
                 _TabPill(
-                  label: '📊 Expense',
+                  icon: Icons.arrow_upward_rounded,
+                  label: 'Expense',
                   active: _tab == 0,
                   onTap: () => setState(() => _tab = 0),
                 ),
                 const SizedBox(width: 8),
                 _TabPill(
-                  label: '💰 Income',
+                  icon: Icons.arrow_downward_rounded,
+                  label: 'Income',
                   active: _tab == 1,
                   onTap: () => setState(() => _tab = 1),
                 ),
                 const Spacer(),
                 GestureDetector(
-                  onTap: () => CategoryDetailDialog.showAddCategoryDialog(context),
+                  onTap: () => CategoryDetailDialog.showAddCategoryDialog(
+                    context,
+                    initialType: _tab == 0 ? CategoryType.expense : CategoryType.income,
+                  ),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                     decoration: BoxDecoration(
@@ -252,8 +278,8 @@ class _CategoriesPageState extends State<CategoriesPage> {
                 child: Center(
                   child: Column(
                     children: [
-                      Text(_tab == 0 ? '🗂️' : '💰',
-                          style: const TextStyle(fontSize: 40)),
+                      Icon(_tab == 0 ? Icons.category_rounded : Icons.payments_rounded,
+                          size: 40, color: theme.ink3),
                       const SizedBox(height: 12),
                       Text('No categories yet',
                           style: theme.serif(20, color: theme.ink2)),
@@ -275,14 +301,13 @@ class _CategoriesPageState extends State<CategoriesPage> {
                       ...displayed.map((cat) {
                         final spent = spendByCat[cat.id] ?? 0;
                         final maxSpend = spendByCat.values.fold(0.0, (a, b) => a > b ? a : b);
-                        final pct = maxSpend > 0 ? spent / maxSpend : 0.0;
                         return SizedBox(
                           width: (constraints.maxWidth - (cols - 1) * 14) / cols,
                           child: _CategoryCard(
                             context: context,
                             category: cat,
                             spent: spent,
-                            progress: pct,
+                            maxCategorySpend: maxSpend,
                             isExpense: _tab == 0,
                           ),
                         );
@@ -290,7 +315,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                       // Add category card
                       SizedBox(
                         width: (constraints.maxWidth - (cols - 1) * 14) / cols,
-                        child: _AddCategoryCard(context: context),
+                        child: _AddCategoryCard(context: context, isExpense: _tab == 0),
                       ),
                     ],
                   );
@@ -306,14 +331,14 @@ class _CategoriesPageState extends State<CategoriesPage> {
 // ─── Overall progress ring ────────────────────────────────────────────────────
 class _OverallRing extends StatelessWidget {
   final BuildContext context;
-  final double overall, totalSpent, totalIncome;
+  final double overall, totalSpent, monthlyGoal;
   final bool mobile;
 
   const _OverallRing({
     required this.context,
     required this.overall,
     required this.totalSpent,
-    required this.totalIncome,
+    required this.monthlyGoal,
     required this.mobile,
   });
 
@@ -358,23 +383,30 @@ class _OverallStats extends StatelessWidget {
   final List<Category> expenses;
   final Map<String, double> spendByCat;
   final double remaining;
+  final double monthlyGoal;
   final bool mobile;
+  final VoidCallback onEditGoal;
 
   const _OverallStats({
     required this.context,
     required this.expenses,
     required this.spendByCat,
     required this.remaining,
+    required this.monthlyGoal,
     required this.mobile,
+    required this.onEditGoal,
   });
 
   @override
   Widget build(BuildContext ctx) {
     final theme = Theme.of(ctx);
+    // "On track" now means "has its own goal, and is within it" — categories
+    // without a goal set aren't counted either way.
     final onTrack = expenses.where((c) {
+      final goal = c.monthlyGoal;
+      if (goal == null || goal <= 0) return false;
       final spent = spendByCat[c.id] ?? 0;
-      final maxSpend = spendByCat.values.fold(0.0, (a, b) => a > b ? a : b);
-      return maxSpend > 0 ? spent / maxSpend < 0.8 : true;
+      return spent <= goal;
     }).length;
 
     return Column(
@@ -382,7 +414,7 @@ class _OverallStats extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          'May overall',
+          '${DateFormat.MMMM().format(DateTime.now())} overall',
           style: GoogleFonts.instrumentSans(
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
@@ -399,7 +431,7 @@ class _OverallStats extends StatelessWidget {
                 style: theme.serif(mobile ? 32 : 42),
               ),
               TextSpan(
-                text: ' of income',
+                text: ' of \$${monthlyGoal.toStringAsFixed(0)} goal',
                 style: theme.serif(mobile ? 18 : 22, color: theme.ink3),
               ),
             ],
@@ -415,6 +447,10 @@ class _OverallStats extends StatelessWidget {
                 label: '$onTrack on track'),
             _Tag(bg: theme.tintLavenderBg, ink: theme.tintLavenderInk,
                 label: '\$${remaining.abs().toStringAsFixed(0)} ${remaining >= 0 ? "remaining" : "over"}'),
+            GestureDetector(
+              onTap: onEditGoal,
+              child: _Tag(bg: theme.surface2, ink: theme.ink2, label: 'Edit goal'),
+            ),
           ],
         ),
       ],
@@ -422,27 +458,105 @@ class _OverallStats extends StatelessWidget {
   }
 }
 
+class _NoGoalPrompt extends StatelessWidget {
+  final bool mobile;
+  final VoidCallback onSetGoal;
+
+  const _NoGoalPrompt({required this.mobile, required this.onSetGoal});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Icon(Icons.flag_rounded, size: 32, color: theme.ink3),
+        const SizedBox(height: 10),
+        Text('No monthly budget goal set', style: theme.serif(mobile ? 18 : 20)),
+        const SizedBox(height: 4),
+        Text(
+          'Set a target and track spending against it all month.',
+          style: theme.sans(13, color: theme.ink2),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 14),
+        ElevatedButton(onPressed: onSetGoal, child: const Text('Set budget goal')),
+      ],
+    );
+  }
+}
+
+void _showEditGoalDialog(BuildContext context, DashboardNotifier notifier) {
+  final ctrl = TextEditingController(
+    text: notifier.monthlyGoal != null ? notifier.monthlyGoal!.toStringAsFixed(0) : '',
+  );
+  showDialog(
+    context: context,
+    builder: (ctx) {
+      final theme = Theme.of(ctx);
+      return AlertDialog(
+        title: Text('Monthly budget goal', style: theme.serif(22)),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(hintText: 'Total budget for the month'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          if (notifier.monthlyGoal != null)
+            TextButton(
+              onPressed: () {
+                notifier.updateMonthlyGoal(null);
+                Navigator.pop(ctx);
+              },
+              child: Text('Clear', style: theme.sans(14, weight: FontWeight.w600, color: theme.tintCoralInk)),
+            ),
+          ElevatedButton(
+            onPressed: () {
+              final v = double.tryParse(ctrl.text.trim());
+              if (v != null) notifier.updateMonthlyGoal(v);
+              Navigator.pop(ctx);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 // ─── Category budget card ─────────────────────────────────────────────────────
 class _CategoryCard extends StatelessWidget {
   final BuildContext context;
   final Category category;
   final double spent;
-  final double progress;
+  final double maxCategorySpend;
   final bool isExpense;
 
   const _CategoryCard({
     required this.context,
     required this.category,
     required this.spent,
-    required this.progress,
+    required this.maxCategorySpend,
     required this.isExpense,
   });
 
   @override
   Widget build(BuildContext ctx) {
     final theme = Theme.of(ctx);
-    final tintInk = _nearestTintInk(theme, category.color);
+    // colorForCategoryKey resolves the light- or dark-theme variant of the
+    // category's curated color, so it always reads correctly in both themes
+    // instead of the old single-fixed-Color approach.
+    final tintInk = colorForCategoryKey(category.colorKey, theme.brightness);
     final tintBg = tintInk.withOpacity(0.1);
+    final goal = category.monthlyGoal;
+    final hasGoal = goal != null && goal > 0;
+    final progress = hasGoal
+        ? spent / goal
+        : (maxCategorySpend > 0 ? spent / maxCategorySpend : 0.0);
+    final over = hasGoal && progress > 1;
+    final productCount = category.visibleProducts.length;
+    final productLabel = productCount == 0 ? 'No products' : '$productCount products';
 
     return GestureDetector(
       onTap: () => CategoryDetailDialog.showCategoryDetailDialog(context, category),
@@ -458,10 +572,7 @@ class _CategoryCard extends StatelessWidget {
                   width: 44, height: 44,
                   decoration: BoxDecoration(
                       color: tintBg, borderRadius: BorderRadius.circular(14)),
-                  child: Center(
-                    child: Text(catEmoji(category.name),
-                        style: const TextStyle(fontSize: 22)),
-                  ),
+                  child: Icon(iconForCategoryKey(category.icon), color: tintInk, size: 22),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -486,17 +597,30 @@ class _CategoryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text(
-                  '\$${spent.toStringAsFixed(0)}',
-                  style: GoogleFonts.instrumentSerif(
-                      fontSize: 24, color: theme.ink, letterSpacing: -0.3),
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '\$${spent.toStringAsFixed(0)}',
+                        style: GoogleFonts.instrumentSerif(
+                            fontSize: 24, color: theme.ink, letterSpacing: -0.3),
+                      ),
+                      if (hasGoal)
+                        TextSpan(
+                          text: ' / \$${goal.toStringAsFixed(0)}',
+                          style: GoogleFonts.instrumentSerif(fontSize: 14, color: theme.ink3),
+                        ),
+                    ],
+                  ),
                 ),
-                Text(
-                  '${(progress * 100).round()}%',
-                  style: GoogleFonts.jetBrainsMono(
-                      fontSize: 12, fontWeight: FontWeight.w600, color: theme.ink2,
-                      fontFeatures: const [FontFeature.tabularFigures()]),
-                ),
+                if (hasGoal || maxCategorySpend > 0)
+                  Text(
+                    '${(progress * 100).round()}%',
+                    style: GoogleFonts.jetBrainsMono(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: over ? theme.tintCoralInk : theme.ink2,
+                        fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -506,14 +630,12 @@ class _CategoryCard extends StatelessWidget {
                 value: progress.clamp(0.0, 1.0),
                 minHeight: 8,
                 backgroundColor: tintBg,
-                valueColor: AlwaysStoppedAnimation(tintInk),
+                valueColor: AlwaysStoppedAnimation(over ? theme.tintCoralInk : tintInk),
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              category.products.where((p) => !p.isDeleted).isEmpty
-                  ? 'No products'
-                  : '${category.products.where((p) => !p.isDeleted).length} products',
+              hasGoal ? productLabel : '$productLabel · no goal set',
               style: theme.sans(11.5, color: theme.ink2),
             ),
           ],
@@ -526,13 +648,17 @@ class _CategoryCard extends StatelessWidget {
 // ─── Add category card ────────────────────────────────────────────────────────
 class _AddCategoryCard extends StatelessWidget {
   final BuildContext context;
-  const _AddCategoryCard({required this.context});
+  final bool isExpense;
+  const _AddCategoryCard({required this.context, required this.isExpense});
 
   @override
   Widget build(BuildContext ctx) {
     final theme = Theme.of(ctx);
     return GestureDetector(
-      onTap: () => CategoryDetailDialog.showAddCategoryDialog(context),
+      onTap: () => CategoryDetailDialog.showAddCategoryDialog(
+        context,
+        initialType: isExpense ? CategoryType.expense : CategoryType.income,
+      ),
       child: Container(
         constraints: const BoxConstraints(minHeight: 160),
         decoration: BoxDecoration(
@@ -548,7 +674,7 @@ class _AddCategoryCard extends StatelessWidget {
               child: Icon(Icons.add_rounded, size: 22, color: theme.ink2),
             ),
             const SizedBox(height: 8),
-            Text('New category', style: theme.sans(13, color: theme.ink2, weight: FontWeight.w500)),
+            Text(isExpense ? 'New category' : 'New income', style: theme.sans(13, color: theme.ink2, weight: FontWeight.w500)),
           ],
         ),
       ),
@@ -558,15 +684,17 @@ class _AddCategoryCard extends StatelessWidget {
 
 // ─── Shared widgets ───────────────────────────────────────────────────────────
 class _TabPill extends StatelessWidget {
+  final IconData icon;
   final String label;
   final bool active;
   final VoidCallback onTap;
 
-  const _TabPill({required this.label, required this.active, required this.onTap});
+  const _TabPill({required this.icon, required this.label, required this.active, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final color = active ? theme.surface : theme.ink2;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -577,9 +705,14 @@ class _TabPill extends StatelessWidget {
           border: Border.all(color: active ? Colors.transparent : theme.border),
           borderRadius: BorderRadius.circular(999),
         ),
-        child: Text(label,
-            style: theme.sans(13, weight: FontWeight.w500,
-                color: active ? theme.surface : theme.ink2)),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 6),
+            Text(label, style: theme.sans(13, weight: FontWeight.w500, color: color)),
+          ],
+        ),
       ),
     );
   }
@@ -601,20 +734,3 @@ class _Tag extends StatelessWidget {
   }
 }
 
-// ─── Color helper ─────────────────────────────────────────────────────────────
-Color _nearestTintInk(ThemeData theme, Color cat) {
-  final opts = [
-    theme.tintMintInk, theme.tintCoralInk, theme.tintButterInk,
-    theme.tintLavenderInk, theme.tintSkyInk, theme.tintRoseInk,
-  ];
-  double best = double.infinity;
-  Color result = theme.tintMintInk;
-  for (final c in opts) {
-    final dr = (cat.red - c.red).toDouble();
-    final dg = (cat.green - c.green).toDouble();
-    final db = (cat.blue - c.blue).toDouble();
-    final d = dr * dr + dg * dg + db * db;
-    if (d < best) { best = d; result = c; }
-  }
-  return result;
-}

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../data/models/category.dart';
+import '../../../core/utils/money.dart';
 
 extension FirstOrNull<E> on Iterable<E> {
   E? get firstOrNull => isEmpty ? null : first;
@@ -84,15 +85,23 @@ class CategoryNotifier extends ChangeNotifier {
   }
 
   // ---------------- Category CRUD ----------------
-  Future<String> addCategory(String name, Color color, CategoryType type) async {
+  Future<String> addCategory(
+    String name,
+    String colorKey,
+    CategoryType type, {
+    String? icon,
+    double? monthlyGoal,
+  }) async {
     final newId = DateTime.now().millisecondsSinceEpoch.toString();
     final cat = Category(
       id: newId,
       name: name.trim(),
-      color: color,
+      colorKey: colorKey,
       type: type,
       userId: userId,
       products: [],
+      icon: icon,
+      monthlyGoalMillimes: monthlyGoal == null ? null : dinarsToMillimes(monthlyGoal),
     );
 
     // write to Firestore (no optimistic local mutation)
@@ -101,13 +110,26 @@ class CategoryNotifier extends ChangeNotifier {
     return newId;
   }
 
-  Future<bool> editCategory(String id, {String? name, Color? color}) async {
+  Future<bool> editCategory(
+    String id, {
+    String? name,
+    String? colorKey,
+    String? icon,
+    double? monthlyGoal,
+    bool clearMonthlyGoal = false,
+  }) async {
     final index = _categories.indexWhere((c) => c.id == id);
     if (index == -1) return false;
 
     final updates = <String, dynamic>{};
     if (name != null) updates['name'] = name.trim();
-    if (color != null) updates['color'] = color.value;
+    if (colorKey != null) updates['colorKey'] = colorKey;
+    if (icon != null) updates['icon'] = icon;
+    if (clearMonthlyGoal) {
+      updates['monthlyGoalMillimes'] = null;
+    } else if (monthlyGoal != null) {
+      updates['monthlyGoalMillimes'] = dinarsToMillimes(monthlyGoal);
+    }
 
     if (updates.isEmpty) return false;
 
