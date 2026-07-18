@@ -1001,7 +1001,7 @@ Widget _CoachCard(
             child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('SPENDO · AI COACH',
+              Text('SPENDO · Insights',
                   style: GoogleFonts.instrumentSans(
                       fontSize: 10.5, fontWeight: FontWeight.w700,
                       color: ink.withOpacity(0.7), letterSpacing: 1.0)),
