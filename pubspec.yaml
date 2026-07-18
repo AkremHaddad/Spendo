@@ -71,11 +71,7 @@ flutter:
   assets:
     - assets/images/appbarLight.svg
     - assets/images/appbarDark.svg
-    - assets/images/logoLight.svg
-    - assets/images/logoDark.svg
     - assets/images/logoMark.svg
-    - assets/images/light3.png
-    - assets/images/dark3.png
     - assets/images/google.png
 
   # To add assets to your application, add an assets section, like this:
