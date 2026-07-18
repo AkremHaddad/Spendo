@@ -183,7 +183,7 @@ class AccountPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   _AchievementsGrid(
-                      dashNotifier: dashNotifier, catNotifier: catNotifier, compact: compact),
+                      dashNotifier: dashNotifier, catNotifier: catNotifier, mobile: mobile, compact: compact),
                 ],
               ),
             ),
@@ -345,11 +345,13 @@ class _ThemeModeOption extends StatelessWidget {
 class _AchievementsGrid extends StatelessWidget {
   final DashboardNotifier dashNotifier;
   final CategoryNotifier catNotifier;
+  final bool mobile;
   final bool compact;
 
   const _AchievementsGrid({
     required this.dashNotifier,
     required this.catNotifier,
+    required this.mobile,
     required this.compact,
   });
 
@@ -395,10 +397,11 @@ class _AchievementsGrid extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        // Below `compact` (which already covers all mobile widths — see
-        // Breakpoints.compact) there isn't room for 3 columns without the
-        // name/desc text overflowing each tile.
-        final cols = compact ? 2 : 3;
+        // On true mobile widths even 2 columns leaves too little room for
+        // the name/desc text (truncates to "Word... ."). Compact (but not
+        // mobile) has enough for 2; below that, one per line so the text
+        // actually reads instead of just showing icon + ellipsis.
+        final cols = mobile ? 1 : (compact ? 2 : 3);
         return Wrap(
           spacing: 12,
           runSpacing: 12,
