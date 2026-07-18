@@ -17,6 +17,18 @@ import '../widgets/weekday_rhythm_chart.dart';
 import '../widgets/forecast_area_chart.dart';
 import '../widgets/net_worth_trend_chart.dart';
 
+// ─── AI coach tip ────────────────────────────────────────────────────────────
+// [categoryId] lets the card render that category's real icon/color (see
+// _CoachCard) instead of a generic badge; [icon] is the badge for tips that
+// aren't about one specific category and is ignored when categoryId is set.
+typedef CoachTip = ({
+  String headline,
+  String body,
+  String tint,
+  String? categoryId,
+  IconData? icon,
+});
+
 // ─── Shared card helper ──────────────────────────────────────────────────────
 Widget _card({
   required BuildContext context,
@@ -121,20 +133,99 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _coachIdx = 0;
 
-  /// Builds coach tips from this user's actual data (biggest category,
-  /// spend pace vs income, savings rate, weekday spending pattern, logging
-  /// gaps) instead of a fixed set of generic messages. Falls back to a
+  /// Builds coach tips from this user's actual data: budget-goal overruns
+  /// and near-misses, month-over-month category swings, the biggest expense
+  /// category, spend pace vs income, savings rate, weekday spending pattern,
+  /// and logging gaps — instead of a fixed set of generic messages. Tips
+  /// tied to one category carry its id (see [CoachTip.categoryId]) so the
+  /// card can render that category's real icon/color. Falls back to a
   /// single generic tip only when there's not enough data yet (e.g. a
   /// brand-new account) for any of the data-driven ones to apply.
-  List<({String headline, String body, String tint})> _buildCoachTips(
+  List<CoachTip> _buildCoachTips(
     DashboardNotifier notifier,
     CategoryNotifier catNotifier,
     Map<String, double> spendByCat,
     double income,
     double expenses,
   ) {
-    final tips = <({String headline, String body, String tint})>[];
+    final tips = <CoachTip>[];
     final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final daysElapsed = now.day;
+    final records = notifier.last6MonthlyRecords; // oldest → newest, always 6
+    final prevRecord = records[records.length - 2];
+    final prevTotal = prevRecord.expenses;
+    // Floor below which a category's month-over-month swing is just noise —
+    // scaled to the user's own prior spending rather than a fixed dollar
+    // amount, so it holds up regardless of income/currency scale.
+    final minSignal = prevTotal * 0.05;
+
+    // Overall monthly budget goal (set on the balance doc, separate from any
+    // per-category goals) — the single biggest-picture alert, so it leads
+    // even the per-category budget tips below.
+    final overallGoal = notifier.monthlyGoal;
+    if (overallGoal != null && overallGoal > 0) {
+      final ratio = expenses / overallGoal;
+      if (expenses > overallGoal) {
+        tips.add((
+          headline: 'Over your monthly budget',
+          body: 'You\'ve spent \$${expenses.toStringAsFixed(0)} of your \$${overallGoal.toStringAsFixed(0)} '
+              'overall goal — \$${(expenses - overallGoal).toStringAsFixed(0)} over for the month.',
+          tint: 'coral',
+          categoryId: null,
+          icon: Icons.report_problem_rounded,
+        ));
+      } else if (ratio >= 0.85) {
+        tips.add((
+          headline: 'Nearing your monthly budget',
+          body: '\$${expenses.toStringAsFixed(0)} of your \$${overallGoal.toStringAsFixed(0)} goal spent '
+              '(${(ratio * 100).round()}%) — pace yourself for the rest of the month.',
+          tint: 'butter',
+          categoryId: null,
+          icon: Icons.speed_rounded,
+        ));
+      }
+    }
+
+    // Budget-goal overruns are the single most actionable thing a coach can
+    // flag, so they lead the list — worst offender (by dollars over) first.
+    final overBudget = <(Category, double, double)>[];
+    final nearGoal = <(Category, double, double, double)>[];
+    for (final cat in catNotifier.expenseCategories) {
+      final goal = cat.monthlyGoal;
+      if (goal == null || goal <= 0) continue;
+      final spent = spendByCat[cat.id] ?? 0;
+      if (spent > goal) {
+        overBudget.add((cat, spent, goal));
+      } else {
+        final ratio = spent / goal;
+        if (ratio >= 0.75) nearGoal.add((cat, spent, goal, ratio));
+      }
+    }
+    if (overBudget.isNotEmpty) {
+      overBudget.sort((a, b) => (b.$2 - b.$3).compareTo(a.$2 - a.$3));
+      final (cat, spent, goal) = overBudget.first;
+      tips.add((
+        headline: '${cat.name} is over budget',
+        body: 'You\'ve spent \$${spent.toStringAsFixed(0)} of your \$${goal.toStringAsFixed(0)} '
+            '${cat.name} goal this month — \$${(spent - goal).toStringAsFixed(0)} over.',
+        tint: 'coral',
+        categoryId: cat.id,
+        icon: Icons.warning_amber_rounded,
+      ));
+    }
+    if (nearGoal.isNotEmpty) {
+      nearGoal.sort((a, b) => b.$4.compareTo(a.$4));
+      final (cat, spent, goal, ratio) = nearGoal.first;
+      tips.add((
+        headline: '${cat.name} is close to its limit',
+        body: '\$${spent.toStringAsFixed(0)} of your \$${goal.toStringAsFixed(0)} goal spent '
+            '(${(ratio * 100).round()}%) — a little more headroom to watch.',
+        tint: 'butter',
+        categoryId: cat.id,
+        icon: Icons.speed_rounded,
+      ));
+    }
 
     // Biggest expense category this month.
     if (spendByCat.isNotEmpty && expenses > 0) {
@@ -143,10 +234,83 @@ class _DashboardPageState extends State<DashboardPage> {
       final pct = (top.value / expenses * 100).round();
       if (cat != null && pct >= 25) {
         tips.add((
-          headline: '${catEmoji(cat.name)} ${cat.name} is your biggest spend',
+          headline: '${cat.name} is your biggest spend',
           body: '${cat.name} is $pct% of your spending this month '
               '(\$${top.value.toStringAsFixed(0)}) — that\'s where a small cut goes furthest.',
           tint: 'butter',
+          categoryId: cat.id,
+          icon: null,
+        ));
+      }
+    }
+
+    // Month-over-month category swings — biggest jump and biggest drop,
+    // only against categories that already had meaningful spend last month
+    // (so a category going from $0 to a few dollars doesn't read as a
+    // "spike").
+    if (prevTotal > 0) {
+      (Category, double, double)? biggestJump; // (cat, curr, prev)
+      (Category, double, double)? biggestDrop; // (cat, curr, prev)
+      for (final entry in spendByCat.entries) {
+        final cat = catNotifier.getCategoryById(entry.key);
+        if (cat == null) continue;
+        final prev = prevRecord.spendByCategory[entry.key] ?? 0;
+        if (prev < minSignal) continue;
+        final curr = entry.value;
+        if (curr - prev >= prev * 0.4) {
+          if (biggestJump == null || (curr - prev) > (biggestJump.$2 - biggestJump.$3)) {
+            biggestJump = (cat, curr, prev);
+          }
+        } else if (prev - curr >= prev * 0.4) {
+          if (biggestDrop == null || (prev - curr) > (biggestDrop.$3 - biggestDrop.$2)) {
+            biggestDrop = (cat, curr, prev);
+          }
+        }
+      }
+      if (biggestJump != null) {
+        final (cat, curr, prev) = biggestJump;
+        final pct = ((curr - prev) / prev * 100).round();
+        tips.add((
+          headline: '${cat.name} spending jumped',
+          body: 'Up $pct% vs last month — \$${prev.toStringAsFixed(0)} → \$${curr.toStringAsFixed(0)}.',
+          tint: 'coral',
+          categoryId: cat.id,
+          icon: Icons.trending_up_rounded,
+        ));
+      }
+      if (biggestDrop != null) {
+        final (cat, curr, prev) = biggestDrop;
+        final pct = ((prev - curr) / prev * 100).round();
+        tips.add((
+          headline: '${cat.name} spending is down',
+          body: 'Down $pct% vs last month — \$${prev.toStringAsFixed(0)} → \$${curr.toStringAsFixed(0)}. Nice work.',
+          tint: 'mint',
+          categoryId: cat.id,
+          icon: Icons.trending_down_rounded,
+        ));
+      }
+    }
+
+    // Income month-over-month — same idea as the category swings above, but
+    // for total income.
+    final prevIncome = prevRecord.income;
+    if (prevIncome > 0) {
+      final incomePct = ((income - prevIncome) / prevIncome * 100).round();
+      if (income - prevIncome <= -prevIncome * 0.25) {
+        tips.add((
+          headline: 'Income is down this month',
+          body: 'Down ${incomePct.abs()}% vs last month — \$${prevIncome.toStringAsFixed(0)} → \$${income.toStringAsFixed(0)}.',
+          tint: 'coral',
+          categoryId: null,
+          icon: Icons.trending_down_rounded,
+        ));
+      } else if (income - prevIncome >= prevIncome * 0.25) {
+        tips.add((
+          headline: 'Income is up this month',
+          body: 'Up $incomePct% vs last month — \$${prevIncome.toStringAsFixed(0)} → \$${income.toStringAsFixed(0)}. Nice.',
+          tint: 'mint',
+          categoryId: null,
+          icon: Icons.trending_up_rounded,
         ));
       }
     }
@@ -163,6 +327,8 @@ class _DashboardPageState extends State<DashboardPage> {
           body: 'At your current rate you\'ll spend \$${projected.toStringAsFixed(0)} this month '
               '— $projectedPct% of your income. Dial back to stay in the green.',
           tint: 'coral',
+          categoryId: null,
+          icon: Icons.speed_rounded,
         ));
       } else if (projectedPct <= 70) {
         tips.add((
@@ -170,6 +336,30 @@ class _DashboardPageState extends State<DashboardPage> {
           body: 'Your spending projects to \$${projected.toStringAsFixed(0)} this month, '
               'only $projectedPct% of income — plenty of room to save.',
           tint: 'mint',
+          categoryId: null,
+          icon: Icons.savings_rounded,
+        ));
+      }
+    }
+
+    // Biggest single transaction this month — only worth calling out if it's
+    // a meaningful chunk of the month's spending, not just the largest of a
+    // handful of similar-sized purchases.
+    final currentMonthExpenses = notifier.currentMonthCashflows.where((c) => c.isExpense).toList();
+    if (currentMonthExpenses.isNotEmpty && expenses > 0) {
+      final biggest = currentMonthExpenses.reduce((a, b) => a.amount.abs() > b.amount.abs() ? a : b);
+      final amt = biggest.amount.abs();
+      if (amt / expenses >= 0.15) {
+        final cat = catNotifier.getCategoryById(biggest.categoryId);
+        final daysAgo = today.difference(DateTime(biggest.date.year, biggest.date.month, biggest.date.day)).inDays;
+        final whenLabel = daysAgo == 0 ? 'today' : daysAgo == 1 ? 'yesterday' : '$daysAgo days ago';
+        tips.add((
+          headline: 'Your biggest purchase this month',
+          body: '\$${amt.toStringAsFixed(0)} on ${cat?.name ?? 'something'} $whenLabel '
+              '— ${(amt / expenses * 100).round()}% of everything you\'ve spent this month.',
+          tint: 'rose',
+          categoryId: cat?.id,
+          icon: cat == null ? Icons.receipt_long_rounded : null,
         ));
       }
     }
@@ -184,12 +374,56 @@ class _DashboardPageState extends State<DashboardPage> {
           body: 'You\'ve saved \$${savings.toStringAsFixed(0)} of \$${income.toStringAsFixed(0)} '
               'income so far — keep logging to see it compound.',
           tint: 'lavender',
+          categoryId: null,
+          icon: Icons.savings_rounded,
         ));
       }
     }
 
+    // No-spend days this month — a simple discipline signal once there's
+    // enough of the month elapsed to make the count meaningful.
+    if (daysElapsed >= 6) {
+      final spentDays = currentMonthExpenses.map((c) => c.date.day).toSet().length;
+      final noSpendDays = daysElapsed - spentDays;
+      if (noSpendDays >= 3) {
+        tips.add((
+          headline: '$noSpendDays no-spend days this month',
+          body: 'Out of $daysElapsed days so far, you kept spending at zero on $noSpendDays of them — that adds up.',
+          tint: 'mint',
+          categoryId: null,
+          icon: Icons.event_available_rounded,
+        ));
+      }
+    }
+
+    // Frequent small purchases — a category with a lot of separate buys
+    // this month, the "death by a thousand cuts" pattern that a single
+    // biggest-category or over-budget tip wouldn't surface on its own.
+    if (daysElapsed >= 10) {
+      final txCounts = <String, int>{};
+      for (final cf in currentMonthExpenses) {
+        txCounts[cf.categoryId] = (txCounts[cf.categoryId] ?? 0) + 1;
+      }
+      final frequent = txCounts.entries.where((e) => e.value >= 6).toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+      if (frequent.isNotEmpty) {
+        final cat = catNotifier.getCategoryById(frequent.first.key);
+        final count = frequent.first.value;
+        final total = spendByCat[frequent.first.key] ?? 0;
+        if (cat != null) {
+          tips.add((
+            headline: '${cat.name}: $count purchases add up',
+            body: '$count separate ${cat.name} purchases this month, totaling \$${total.toStringAsFixed(0)} '
+                '— worth budgeting for as a whole instead of one at a time.',
+            tint: 'sky',
+            categoryId: cat.id,
+            icon: Icons.repeat_rounded,
+          ));
+        }
+      }
+    }
+
     // Weekday spending pattern (same 8-week window as the rhythm chart).
-    final today = DateTime(now.year, now.month, now.day);
     final windowStart = today.subtract(const Duration(days: 55));
     final weekdayTotals = List<double>.filled(7, 0);
     final weekdayCounts = List<int>.filled(7, 0);
@@ -212,6 +446,8 @@ class _DashboardPageState extends State<DashboardPage> {
         body: 'You spend about \$${peakAvg.toStringAsFixed(0)} on average each $peakDay '
             '— plan ahead if you want to change that pattern.',
         tint: 'sky',
+        categoryId: null,
+        icon: Icons.calendar_view_week_rounded,
       ));
     }
 
@@ -224,6 +460,8 @@ class _DashboardPageState extends State<DashboardPage> {
           headline: 'It\'s been $daysSince days since your last entry',
           body: 'Logging regularly is what makes these numbers useful — jump into Cashflow and catch up.',
           tint: 'coral',
+          categoryId: null,
+          icon: Icons.notifications_active_rounded,
         ));
       }
     }
@@ -233,6 +471,8 @@ class _DashboardPageState extends State<DashboardPage> {
         headline: 'Track every dollar 💰',
         body: 'Logging your expenses daily gives you a clear picture of where your money is going.',
         tint: 'mint',
+        categoryId: null,
+        icon: Icons.auto_awesome_rounded,
       ));
     }
 
@@ -330,7 +570,7 @@ class _DashboardPageState extends State<DashboardPage> {
                       const SizedBox(height: 12),
                       _IncomeExpenseRow(context, income, expenses, mobile),
                       SizedBox(height: mobile ? 12 : 18),
-                      _CoachCard(context, coach, () {
+                      _CoachCard(context, catNotifier, coach, () {
                         setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
                       }, mobile),
                     ])
@@ -340,7 +580,7 @@ class _DashboardPageState extends State<DashboardPage> {
                           const SizedBox(height: 18),
                           _IncomeExpenseRow(context, income, expenses, mobile),
                           SizedBox(height: mobile ? 12 : 18),
-                          _CoachCard(context, coach, () {
+                          _CoachCard(context, catNotifier, coach, () {
                             setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
                           }, mobile),
                         ])
@@ -383,7 +623,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               children: [
                                 _IncomeExpenseRow(context, income, expenses, mobile),
                                 SizedBox(height: mobile ? 12 : 18),
-                                _CoachCard(context, coach, () {
+                                _CoachCard(context, catNotifier, coach, () {
                                   setState(() => _coachIdx = (_coachIdx + 1) % coaches.length);
                                 }, mobile),
                               ],
@@ -709,12 +949,27 @@ Widget _IncomeExpenseRow(BuildContext context, double income, double expenses, b
 
 Widget _CoachCard(
   BuildContext context,
-  ({String headline, String body, String tint}) coach,
+  CategoryNotifier catNotifier,
+  CoachTip coach,
   VoidCallback onNext,
   bool mobile,
 ) {
   final theme = Theme.of(context);
-  final (bg, ink) = _tintPair(theme, coach.tint);
+  // Tips tied to a specific category (see CoachTip.categoryId) borrow that
+  // category's own icon/color instead of a generic badge, so the card
+  // visually matches the same category everywhere else in the app (donut
+  // chart, budget rings, recent activity).
+  final coachCategory = coach.categoryId != null ? catNotifier.getCategoryById(coach.categoryId!) : null;
+  final Color bg, ink;
+  final IconData badgeIcon;
+  if (coachCategory != null) {
+    ink = colorForCategoryKey(coachCategory.colorKey, theme.brightness);
+    bg = ink.withOpacity(0.12);
+    badgeIcon = iconForCategoryKey(coachCategory.icon);
+  } else {
+    (bg, ink) = _tintPair(theme, coach.tint);
+    badgeIcon = coach.icon ?? Icons.auto_awesome_rounded;
+  }
 
   return _card(
     context: context,
@@ -726,7 +981,12 @@ Widget _CoachCard(
         Container(
           width: 44, height: 44,
           decoration: BoxDecoration(color: ink, shape: BoxShape.circle),
-          child: Icon(Icons.auto_awesome_rounded, color: bg, size: 22),
+          // theme.bg (the opaque page background), not the tint's own `bg` —
+          // that's a low-alpha wash in dark theme (by design, for card fills)
+          // and made the icon glyph nearly invisible against the solid `ink`
+          // circle behind it. theme.bg stays high-contrast against `ink` in
+          // both themes since ink itself flips dark-muted/light-vivid.
+          child: Icon(badgeIcon, color: theme.bg, size: 22),
         ),
         const SizedBox(width: 16),
         // Fixed height for the same IntrinsicHeight-vs-real-layout reason
@@ -1276,19 +1536,4 @@ Widget _WeekdayRhythmCard(BuildContext context, DashboardNotifier notifier, bool
     case 'rose':     return (theme.tintRoseBg,     theme.tintRoseInk);
     default:         return (theme.tintMintBg,     theme.tintMintInk);
   }
-}
-
-String catEmoji(String name) {
-  final n = name.toLowerCase();
-  if (n.contains('food') || n.contains('grocer') || n.contains('eat')) return '🥬';
-  if (n.contains('dine') || n.contains('restaur') || n.contains('cafe')) return '🍜';
-  if (n.contains('transport') || n.contains('uber') || n.contains('taxi')) return '🚇';
-  if (n.contains('rent') || n.contains('hous') || n.contains('home')) return '🏠';
-  if (n.contains('shop') || n.contains('cloth')) return '🛍️';
-  if (n.contains('sub') || n.contains('stream')) return '📺';
-  if (n.contains('health') || n.contains('gym') || n.contains('well')) return '🧘';
-  if (n.contains('fun') || n.contains('entertain') || n.contains('movie')) return '🎟️';
-  if (n.contains('salary') || n.contains('income') || n.contains('pay')) return '💰';
-  if (n.contains('invest') || n.contains('saving')) return '📈';
-  return '💳';
 }
