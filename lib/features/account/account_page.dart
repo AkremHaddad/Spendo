@@ -47,6 +47,7 @@ class AccountPage extends StatelessWidget {
     final catNotifier = context.watch<CategoryNotifier>();
     final user = FirebaseAuth.instance.currentUser;
     final mobile = isMobile(context);
+    final compact = isCompact(context);
 
     final displayName = user?.displayName ?? user?.email?.split('@').first ?? 'User';
     final email = user?.email ?? '';
@@ -182,7 +183,7 @@ class AccountPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   _AchievementsGrid(
-                      dashNotifier: dashNotifier, catNotifier: catNotifier, mobile: mobile),
+                      dashNotifier: dashNotifier, catNotifier: catNotifier, compact: compact),
                 ],
               ),
             ),
@@ -344,12 +345,12 @@ class _ThemeModeOption extends StatelessWidget {
 class _AchievementsGrid extends StatelessWidget {
   final DashboardNotifier dashNotifier;
   final CategoryNotifier catNotifier;
-  final bool mobile;
+  final bool compact;
 
   const _AchievementsGrid({
     required this.dashNotifier,
     required this.catNotifier,
-    required this.mobile,
+    required this.compact,
   });
 
   @override
@@ -394,7 +395,10 @@ class _AchievementsGrid extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (ctx, constraints) {
-        final cols = mobile ? 2 : 3;
+        // Below `compact` (which already covers all mobile widths — see
+        // Breakpoints.compact) there isn't room for 3 columns without the
+        // name/desc text overflowing each tile.
+        final cols = compact ? 2 : 3;
         return Wrap(
           spacing: 12,
           runSpacing: 12,

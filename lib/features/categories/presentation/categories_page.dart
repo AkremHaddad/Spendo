@@ -223,22 +223,36 @@ class _CategoriesPageState extends State<CategoriesPage> {
             SizedBox(height: mobile ? 14 : 18),
 
             // ── Tabs + Add button ───────────────────────────────────────
+            // The tab pills scroll horizontally inside their own Expanded
+            // instead of relying on a Spacer — at compact widths (600-900px,
+            // see Breakpoints.compact) the pills + "New category" button
+            // don't fit on one line without this, same overflow class fixed
+            // on the dashboard/cashflow/account pages.
             Row(
               children: [
-                _TabPill(
-                  icon: Icons.arrow_upward_rounded,
-                  label: 'Expense',
-                  active: _tab == 0,
-                  onTap: () => setState(() => _tab = 0),
+                Expanded(
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _TabPill(
+                          icon: Icons.arrow_upward_rounded,
+                          label: 'Expense',
+                          active: _tab == 0,
+                          onTap: () => setState(() => _tab = 0),
+                        ),
+                        const SizedBox(width: 8),
+                        _TabPill(
+                          icon: Icons.arrow_downward_rounded,
+                          label: 'Income',
+                          active: _tab == 1,
+                          onTap: () => setState(() => _tab = 1),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const SizedBox(width: 8),
-                _TabPill(
-                  icon: Icons.arrow_downward_rounded,
-                  label: 'Income',
-                  active: _tab == 1,
-                  onTap: () => setState(() => _tab = 1),
-                ),
-                const Spacer(),
+                const SizedBox(width: 10),
                 GestureDetector(
                   onTap: () => CategoryDetailDialog.showAddCategoryDialog(
                     context,

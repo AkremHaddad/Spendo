@@ -122,6 +122,7 @@ class _CashFlowPageState extends State<CashFlowPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final mobile = isMobile(context);
+    final compact = isCompact(context);
 
     return Scaffold(
       backgroundColor: theme.bg,
@@ -161,6 +162,7 @@ class _CashFlowPageState extends State<CashFlowPage> {
                   monthIncome: income,
                   monthExpenses: expenses,
                   mobile: mobile,
+                  compact: compact,
                 ),
 
                 SizedBox(height: mobile ? 14 : 18),
@@ -252,6 +254,10 @@ class _CashFlowPageState extends State<CashFlowPage> {
                 SizedBox(height: mobile ? 14 : 18),
 
                 // ── Transaction list + side rail ────────────────────────
+                // Below `compact` there isn't enough room for the list next
+                // to a fixed-260px rail without cramming either — stack the
+                // rail underneath instead (same convention as the dashboard's
+                // paired cards, see Breakpoints.compact).
                 mobile
                     ? _TransactionList(
                         context: ctx,
@@ -259,29 +265,47 @@ class _CashFlowPageState extends State<CashFlowPage> {
                         categoryNotifier: categoryNotifier,
                         mobile: mobile,
                       )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            flex: 16,
-                            child: _TransactionList(
-                              context: ctx,
-                              transactions: filtered,
-                              categoryNotifier: categoryNotifier,
-                              mobile: mobile,
-                            ),
+                    : compact
+                        ? Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _TransactionList(
+                                context: ctx,
+                                transactions: filtered,
+                                categoryNotifier: categoryNotifier,
+                                mobile: mobile,
+                              ),
+                              const SizedBox(height: 18),
+                              _SideRail(
+                                context: ctx,
+                                categoryNotifier: categoryNotifier,
+                                allTxs: allTxs,
+                              ),
+                            ],
+                          )
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 16,
+                                child: _TransactionList(
+                                  context: ctx,
+                                  transactions: filtered,
+                                  categoryNotifier: categoryNotifier,
+                                  mobile: mobile,
+                                ),
+                              ),
+                              const SizedBox(width: 18),
+                              SizedBox(
+                                width: 260,
+                                child: _SideRail(
+                                  context: ctx,
+                                  categoryNotifier: categoryNotifier,
+                                  allTxs: allTxs,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 18),
-                          SizedBox(
-                            width: 260,
-                            child: _SideRail(
-                              context: ctx,
-                              categoryNotifier: categoryNotifier,
-                              allTxs: allTxs,
-                            ),
-                          ),
-                        ],
-                      ),
               ],
             ),
           );
@@ -303,6 +327,7 @@ class _SummaryStrip extends StatelessWidget {
   final BuildContext context;
   final double dayIncome, dayExpenses, monthIncome, monthExpenses;
   final bool mobile;
+  final bool compact;
 
   const _SummaryStrip({
     required this.context,
@@ -311,6 +336,7 @@ class _SummaryStrip extends StatelessWidget {
     required this.monthIncome,
     required this.monthExpenses,
     required this.mobile,
+    required this.compact,
   });
 
   @override
@@ -328,8 +354,27 @@ class _SummaryStrip extends StatelessWidget {
             (label: 'Month spent', value: '-\$${monthExpenses.toStringAsFixed(0)}',tint: theme.tintLavenderBg,ink: theme.tintLavenderInk),
           ];
 
+    // Below `compact`, 4 cards in one row don't have enough width without
+    // cramming — split into a 2x2 grid instead of forcing them in a line
+    // (mobile already sidesteps this by only having 2 items to begin with).
+    if (!mobile && compact) {
+      return Column(
+        children: [
+          _summaryRow(ctx, items.sublist(0, 2)),
+          const SizedBox(height: 12),
+          _summaryRow(ctx, items.sublist(2, 4)),
+        ],
+      );
+    }
+    return _summaryRow(ctx, items);
+  }
+
+  Widget _summaryRow(
+    BuildContext ctx,
+    List<({String label, String value, Color tint, Color ink})> rowItems,
+  ) {
     return Row(
-      children: items.asMap().entries.map((e) {
+      children: rowItems.asMap().entries.map((e) {
         final i = e.key;
         final item = e.value;
         return Expanded(
