@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../main/main_page_notifier.dart';
 import '../../shared/nav/nav_items.dart';
@@ -156,28 +157,10 @@ class _SpendoLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
+    return SvgPicture.asset(
+      'assets/images/logoMark.svg',
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [theme.accentColor, theme.tintSkyInk],
-        ),
-        borderRadius: BorderRadius.circular(size * 0.3),
-      ),
-      child: Center(
-        child: Text(
-          '\$',
-          style: GoogleFonts.instrumentSerif(
-            fontSize: size * 0.55,
-            color: Colors.white,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
-      ),
     );
   }
 }
