@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'features/auth/auth_notifier.dart';
 import 'features/auth/auth_page.dart';
+import 'features/auth/email_verification_page.dart';
 import 'features/categories/logic/categoryNotifier.dart';
 import 'features/cashflow/logic/cashflowNotifier.dart';
 import 'features/dashboard/logic/dashboardNotifier.dart';
@@ -80,9 +81,11 @@ class SpendoApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: themeNotifier.themeMode, // <-- use themeNotifier
-            home: auth.isLoggedIn
-                ? MainPage(userId: auth.userId ?? '')
-                : const AuthPage(),
+            home: !auth.isLoggedIn
+                ? const AuthPage()
+                : auth.isEmailVerified
+                    ? MainPage(userId: auth.userId ?? '')
+                    : const EmailVerificationPage(),
           );
         },
       ),

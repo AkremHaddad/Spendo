@@ -14,6 +14,7 @@ class AuthNotifier extends ChangeNotifier {
 
   User? get currentUser => _auth.currentUser;
   String? get userId => currentUser?.uid;
+  bool get isEmailVerified => currentUser?.emailVerified ?? false;
 
   AuthNotifier() {
     _auth.authStateChanges().listen((user) {
@@ -48,6 +49,11 @@ class AuthNotifier extends ChangeNotifier {
       // Create default categories if new user
       final isNew = userCred.additionalUserInfo?.isNewUser ?? false;
       if (isNew) await _createDefaultCategoriesForUser(user.uid);
+
+      // Kick off email verification; account creation still succeeds if this fails.
+      try {
+        await user.sendEmailVerification();
+      } catch (_) {}
 
       _isLoggedIn = true;
       notifyListeners();
@@ -118,6 +124,30 @@ class AuthNotifier extends ChangeNotifier {
     } catch (e) {
       return e.toString();
     }
+  }
+
+  // ---------------- EMAIL VERIFICATION ----------------
+  Future<String?> resendVerificationEmail() async {
+    try {
+      final user = _auth.currentUser;
+      if (user == null) return 'No signed-in user';
+      await user.sendEmailVerification();
+      return null;
+    } on FirebaseAuthException catch (e) {
+      return e.message;
+    } catch (e) {
+      return e.toString();
+    }
+  }
+
+  /// Refreshes the current user from Firebase so `isEmailVerified` reflects
+  /// a link the user may have just clicked in their inbox.
+  Future<bool> refreshEmailVerifiedStatus() async {
+    try {
+      await _auth.currentUser?.reload();
+    } catch (_) {}
+    notifyListeners();
+    return isEmailVerified;
   }
 
   // ---------------- LOGOUT ----------------
